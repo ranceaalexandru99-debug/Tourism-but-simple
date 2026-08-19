@@ -52,5 +52,15 @@ export default defineConfig(({ mode }) => ({
           },
         })]),
   ],
-  server: { port: 5173, open: true, host: true, allowedHosts: true },
+  server: {
+    port: 5173, open: true, host: true, allowedHosts: true,
+    // Route /api to the local API server (npm run server) so the browser sees
+    // one origin in dev — no CORS, and the client needs no absolute URL.
+    proxy: {
+      "/api": {
+        target: process.env.API_TARGET || "http://localhost:8787",
+        changeOrigin: true,
+      },
+    },
+  },
 }));

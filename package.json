@@ -9,10 +9,13 @@
     "build:share": "vite build --mode single --outDir share --emptyOutDir",
     "preview": "vite preview",
     "test": "vitest run",
-    "legal": "node scripts/build-legal-pages.mjs"
+    "legal": "node scripts/build-legal-pages.mjs",
+    "server": "node server/index.js",
+    "dev_full": "node server/index.js & vite"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
+    "express": "^5.2.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.23.0",
     "lz-string": "^1.5.0",

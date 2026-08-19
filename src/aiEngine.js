@@ -6,101 +6,30 @@
 // shape as the local DB entries, which we then feed through assembleRoute() —
 // so the rest of the app is unchanged.
 //
-// ⚠️ PROTOTYPE ONLY: this calls the Claude API directly from the browser with
-// `dangerouslyAllowBrowser`, which exposes the API key to anyone using the app.
-// In production, proxy this through a small backend (e.g. a serverless function)
-// that holds the key server-side. The request/response shape stays the same.
+// The Claude call happens on the server (server/index.js), never here: this
+// module only POSTs the user's preferences to /api/generate-route. The API key
+// lives in ANTHROPIC_API_KEY on that server and is never part of the client
+// bundle. Nothing here can leak a credential, because it holds none.
 //
-// Set VITE_ANTHROPIC_API_KEY in a .env file to enable. Without it, the app
-// transparently falls back to the mock engine.
+// With no server reachable (or one started without a key), the app falls back
+// to its local engine exactly as before.
 
 import { assembleRoute, generateRoute, resolveDestination } from "./mockEngine.js";
-import { getLang, LANG_NAME } from "./i18n.js";
+import { getLang } from "./i18n.js";
 import { searchDestinations, nameMatchesCity } from "./destinations.js";
 import { loadCityPois, buildDest } from "./poiDb.js";
 import { fetchCityPoisLive } from "./osmLive.js";
 
-const API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY;
+// Same origin by default — dev goes through the Vite proxy (see vite.config.js),
+// production behind the same host or a rewrite. Set VITE_API_BASE to point at a
+// separately deployed API (e.g. "https://api.example.com").
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-export const hasAI = () => Boolean(API_KEY);
-
-// Lazy-load the SDK only when a key is configured, so the heavy dependency is
-// never fetched (and the initial bundle stays small) when running on the mock.
-let _client = null;
-async function client() {
-  if (!_client) {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    // 45s cap (SDK default is 10 MINUTES — a hung connection would trap the
-    // user on the loading screen); no retry, the mock fallback is instant.
-    _client = new Anthropic({ apiKey: API_KEY, dangerouslyAllowBrowser: true, timeout: 45000, maxRetries: 0 });
-  }
-  return _client;
-}
-
-// JSON schema for the destination Claude must return — mirrors a DESTINATIONS
-// entry in mockEngine.js. Structured outputs guarantee it parses cleanly.
-const DEST_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    name: { type: "string" },
-    country: { type: "string" },
-    emoji: { type: "string" },
-    blurb: { type: "string" },
-    center: { type: "array", items: { type: "number" } },
-    pois: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          name: { type: "string" },
-          emoji: { type: "string" },
-          tags: { type: "array", items: { type: "string", enum: ["culture", "food", "nature", "nightlife", "shopping", "family"] } },
-          dur: { type: "number" },
-          hours: { type: "string" },
-          cost: { type: "number" },
-          tip: { type: "string" },
-          ll: { type: "array", items: { type: "number" } },
-        },
-        required: ["name", "emoji", "tags", "dur", "hours", "cost", "tip", "ll"],
-      },
-    },
-    food: { type: "array", items: { type: "string" } },
-    transport: { type: "string" },
-  },
-  required: ["name", "country", "emoji", "blurb", "center", "pois", "food", "transport"],
-};
-
-const INTEREST_LABELS = {
-  culture: "cultură/istorie", food: "gastronomie", nature: "natură",
-  nightlife: "viață de noapte", shopping: "shopping", family: "activități de familie",
-};
-
-function buildPrompt(prefs) {
-  const interests = (prefs.interests || []).map((i) => INTEREST_LABELS[i] || i).join(", ") || "variat";
-  const flex = prefs.days === "flex";
-  const days = flex ? 4 : Math.max(1, Math.min(7, Number(prefs.days) || 2));
-  const nPois = flex ? 16 : Math.min(32, Math.max(8, days * 4));
-  const lines = [
-    `Destinație cerută de utilizator: "${prefs.destination}".`,
-    `Număr de zile: ${flex ? "flexibil" : days}.`,
-    `Interese principale: ${interests}.`,
-    `Ritm preferat: ${prefs.pace || "balanced"}.`,
-  ];
-  if (prefs.instruction) lines.push(`Cerere suplimentară de la utilizator: "${prefs.instruction}".`);
-  const langName = LANG_NAME[getLang()] || "English";
-  lines.push(
-    "",
-    `Generează datele pentru această destinație: ${nPois} obiective turistice reale,`,
-    "cu coordonate GPS corecte [lat, lng], durată recomandată în minute,",
-    "program de vizitare, cost bilet în EUR (0 dacă e gratuit) și un sfat local util.",
-    "Pune accent pe obiectivele care se potrivesc cu interesele de mai sus.",
-    "Include 4 recomandări de mâncare locală și o notă scurtă despre transport.",
-    `Write ALL text fields (name, blurb, tip, hours, food, transport, country) in ${langName}. Tips should sound like advice from a local.`,
-  );
-  return lines.join("\n");
-}
+// The browser cannot know whether the server has a key until it asks. Start
+// optimistic; the first definitive "ai_disabled" answer flips this off so we
+// stop paying a failed round-trip on every subsequent generation.
+let _aiDisabled = false;
+export const hasAI = () => !_aiDisabled;
 
 // Cache the AI-generated destination data so we don't re-call Claude for the
 // same place. Keyed by destination + interests + free-text request (the things
@@ -124,30 +53,35 @@ export async function generateRouteAI(prefs) {
   const cached = readCache(prefs);
   if (cached) return assembleRoute(cached, prefs);
 
-  const c = await client();
-  // Stream the response (recommended pattern — avoids HTTP timeouts) and take
-  // the final assembled message.
-  const stream = c.messages.stream({
-    model: "claude-opus-4-8",
-    // Up to 32 POIs, each with name/tags/hours/tip/coords, plus food and
-    // transport — 4000 tokens truncated the JSON on richer cities, and a
-    // truncated payload only surfaced later as a JSON.parse error.
-    max_tokens: 8000,
-    system:
-      "Ești un expert în turism care creează itinerarii personalizate. " +
-      "Răspunzi DOAR cu datele structurate cerute, în limba română, cu informații reale și precise.",
-    output_config: { format: { type: "json_schema", schema: DEST_SCHEMA }, effort: "low" },
-    messages: [{ role: "user", content: buildPrompt(prefs) }],
-  });
-  const message = await stream.finalMessage();
+  // Abort rather than trap the user on the loading screen if the server hangs.
+  // The server caps the upstream call at 45s; allow a little more for transit.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 50_000);
+  let res;
+  try {
+    res = await fetch(`${API_BASE}/api/generate-route`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prefs, lang: getLang() }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
-  // Hitting the token ceiling yields syntactically broken JSON; say so plainly
-  // instead of letting JSON.parse throw a confusing SyntaxError.
-  if (message.stop_reason === "max_tokens") throw new Error("Răspuns AI trunchiat (max_tokens)");
-  const text = message.content.find((b) => b.type === "text")?.text;
-  if (!text) throw new Error("Răspuns AI gol");
+  if (!res.ok) {
+    // A server with no key configured answers 503 ai_disabled. Remember it so
+    // the tier ladder stops trying on every future generation.
+    let payload = null;
+    try { payload = await res.json(); } catch {}
+    if (res.status === 503 && payload?.error === "ai_disabled") _aiDisabled = true;
+    throw new Error(`Generare AI eșuată (${res.status}${payload?.error ? ` ${payload.error}` : ""})`);
+  }
+
+  const { dest: raw } = await res.json();
+  if (!raw || !Array.isArray(raw.pois)) throw new Error("Răspuns AI invalid");
   // key "ai" (not "custom") so the map renders; ll present on every POI.
-  const dest = { key: "ai", ...JSON.parse(text) };
+  const dest = { key: "ai", ...raw };
 
   writeCache(prefs, dest);
   return assembleRoute(dest, prefs);

@@ -23,14 +23,11 @@ export const LANGS = [
   { code: "ko", label: "한국어", flag: "🇰🇷" },
 ];
 
-// Language name (in English) used in the AI prompt so Claude writes content
-// in the selected language.
-export const LANG_NAME = {
-  en: "English", ro: "Romanian", fr: "French", es: "Spanish", it: "Italian",
-  de: "German", pt: "Portuguese", nl: "Dutch", pl: "Polish", el: "Greek",
-  tr: "Turkish", uk: "Ukrainian", ru: "Russian", zh: "Simplified Chinese",
-  ja: "Japanese", ko: "Korean",
-};
+// Language name (in English) used in the AI prompt so Claude writes content in
+// the selected language. It lives in the shared route contract because the API
+// server needs it too and must not import this (React-dependent) module.
+export { LANG_NAME } from "./shared/routeSchema.js";
+import { LANG_NAME } from "./shared/routeSchema.js";
 
 const LS_KEY = "vai_lang";
 
