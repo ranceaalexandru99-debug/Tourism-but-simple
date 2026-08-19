@@ -1,0 +1,177 @@
+import { useState, useEffect } from "react";
+import { View, Text, Image, Pressable, ScrollView, TextInput, Modal, StyleSheet, Alert } from "react-native";
+import { C, themedStyles } from "../lib/theme.js";
+import { useI18n, tripTitle } from "../lib/i18n.js";
+import { FONT } from "../fonts.js";
+import { Btn } from "../components/ui.js";
+import { pickPhoto, listMemories, addMemory, deleteMemory } from "../lib/gallery.js";
+import { Camera, Save, X, Trash2, MapPin, TriangleAlert } from "../icons.js";
+
+// Soft warning once the gallery grows large — photos live on the device.
+const GALLERY_WARN = 50;
+
+const fmtDay = (ts, locale) =>
+  new Date(ts).toLocaleDateString(locale === "zh" ? "zh-CN" : locale || "en", { day: "numeric", month: "short", year: "numeric" });
+
+function Compose({ photo, saved, onSave, onCancel }) {
+  const { t } = useI18n();
+  const [caption, setCaption] = useState("");
+  const [tripId, setTripId] = useState(saved[0]?.id || "");
+  const trip = saved.find((r) => r.id === tripId);
+  return (
+    <Modal transparent animationType="slide" visible onRequestClose={onCancel}>
+      <Pressable style={styles.backdrop} onPress={onCancel}>
+        <Pressable style={styles.sheet} onPress={() => {}}>
+          <View style={styles.grab} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <Camera size={19} color={C.gold} /><Text style={[styles.sheetTitle, { marginBottom: 0 }]}>{t("galAddTitle")}</Text>
+          </View>
+          <Image source={{ uri: photo }} style={styles.preview} resizeMode="cover" />
+          <TextInput style={styles.input} placeholder={t("galCaptionPh")} placeholderTextColor={C.muted}
+            value={caption} onChangeText={setCaption} />
+          {saved.length > 0 && (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+              {saved.map((r) => {
+                const on = r.id === tripId;
+                return (
+                  <Pressable key={r.id} onPress={() => setTripId(on ? "" : r.id)} style={[styles.chip, { backgroundColor: on ? C.gold : C.card, borderColor: on ? C.gold : C.border }]}>
+                    <Text style={{ color: on ? C.bg : C.mutedLight, fontFamily: FONT.semibold, fontSize: 13 }}>{r.emoji} {r.destName}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+          <Btn icon={Save} onPress={() => onSave({ caption: caption.trim(), tripId: trip?.id || null, tripTitle: trip ? tripTitle(trip, t) : null })}>
+            {t("galSave")}
+          </Btn>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function Viewer({ memory, onClose, onDelete }) {
+  const { t, lang } = useI18n();
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <View style={styles.viewer}>
+        <View style={styles.viewerBar}>
+          <Pressable onPress={onClose} hitSlop={10}><X size={24} color="#fff" /></Pressable>
+          <Pressable onPress={() => onDelete(memory.id)} style={[styles.delBtn, { flexDirection: "row", alignItems: "center", gap: 5 }]}>
+            <Trash2 size={13} color={C.red} />
+            <Text style={{ color: C.red, fontFamily: FONT.bold, fontSize: 13 }}>{t("galDelete")}</Text>
+          </Pressable>
+        </View>
+        <Image source={{ uri: memory.uri }} style={styles.viewerImg} resizeMode="contain" />
+        {!!memory.caption && <Text style={styles.viewerCaption}>{memory.caption}</Text>}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 6 }}>
+          {memory.tripTitle ? <MapPin size={12} color="#ffffffaa" /> : null}
+          <Text style={[styles.viewerMeta, { marginTop: 0 }]}>{memory.tripTitle ? `${memory.tripTitle} · ` : ""}{fmtDay(memory.ts, lang)}</Text>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+export default function Gallery({ saved }) {
+  const { t, lang } = useI18n();
+  const [memories, setMemories] = useState([]);
+  const [pending, setPending] = useState(null);
+  const [viewing, setViewing] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = () => setMemories(listMemories());
+  useEffect(() => { refresh(); }, []);
+
+  const add = async () => {
+    setBusy(true);
+    try {
+      const uri = await pickPhoto(true);
+      // Refusing the camera permission used to look like a dead button.
+      if (uri === "denied") Alert.alert(t("galAddPhoto"), t("galPermDenied"));
+      else if (uri) setPending(uri);
+    } finally { setBusy(false); }
+  };
+
+  const save = ({ caption, tripId, tripTitle: tt }) => {
+    addMemory({ id: `m${Date.now()}${Math.random().toString(36).slice(2, 6)}`, ts: Date.now(), uri: pending, caption, tripId, tripTitle: tt, stopName: null, ll: null });
+    setPending(null);
+    refresh();
+  };
+
+  const remove = (id) => { deleteMemory(id); setViewing(null); refresh(); };
+
+  return (
+    <>
+      <ScrollView style={styles.wrap} contentContainerStyle={{ padding: 22, paddingBottom: 30 }}>
+        <View style={styles.head}>
+          <Text style={styles.title}>{t("navGallery")}</Text>
+          <Pressable onPress={add} disabled={busy} style={styles.addBtn}>
+            <Text style={{ color: C.bg, fontFamily: FONT.extrabold, fontSize: 14 }}>{busy ? "…" : `＋ ${t("galAdd")}`}</Text>
+          </Pressable>
+        </View>
+        <Text style={{ color: C.muted, fontSize: 13, marginBottom: 20 }}>{t("gallerySub")}</Text>
+
+        {memories.length >= GALLERY_WARN && (
+          <View style={{ backgroundColor: C.gold + "14", borderWidth: 1, borderColor: C.gold + "44", borderRadius: 14, padding: 12, marginBottom: 16 }}>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <TriangleAlert size={14} color={C.gold} style={{ marginTop: 2 }} />
+              <Text style={{ color: C.gold, fontSize: 13, lineHeight: 19, flex: 1 }}>{t("galLimitWarn", { n: memories.length })}</Text>
+            </View>
+          </View>
+        )}
+
+        {memories.length === 0 ? (
+          <Pressable onPress={add} style={styles.empty}>
+            <View style={{ marginBottom: 12 }}><Camera size={48} color={C.gold} strokeWidth={1.4} /></View>
+            <Text style={{ color: C.cream, fontSize: 16, fontFamily: FONT.bold, marginBottom: 4 }}>{t("galEmpty")}</Text>
+            <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", lineHeight: 20 }}>{t("galEmptySub")}</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.grid}>
+            {memories.map((m) => (
+              <Pressable key={m.id} onPress={() => setViewing(m)} style={styles.card}>
+                <Image source={{ uri: m.uri }} style={styles.thumb} resizeMode="cover" />
+                <View style={{ padding: 10 }}>
+                  <Text style={{ color: m.caption ? C.cream : C.muted, fontSize: 14, fontFamily: FONT.semibold, fontStyle: m.caption ? "normal" : "italic" }} numberOfLines={1}>
+                    {m.caption || t("galNoCaption")}
+                  </Text>
+                  <Text style={{ color: C.muted, fontSize: 11, marginTop: 3 }} numberOfLines={1}>
+                    {m.tripTitle ? m.tripTitle : fmtDay(m.ts, lang)}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {pending && <Compose photo={pending} saved={saved} onSave={save} onCancel={() => setPending(null)} />}
+      {viewing && <Viewer memory={viewing} onClose={() => setViewing(null)} onDelete={remove} />}
+    </>
+  );
+}
+
+const styles = themedStyles(() => StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: C.bg },
+  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 },
+  title: { fontFamily: FONT.display, color: C.cream, fontSize: 28, letterSpacing: -0.4 },
+  addBtn: { backgroundColor: C.gold, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 15 },
+  empty: { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.gold + "55", borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center" },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  card: { width: "47%", flexGrow: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: "hidden" },
+  thumb: { width: "100%", aspectRatio: 1, backgroundColor: C.surface },
+  backdrop: { flex: 1, backgroundColor: "#000c", justifyContent: "flex-end" },
+  sheet: { backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, paddingBottom: 30 },
+  grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: C.border, alignSelf: "center", marginBottom: 16 },
+  sheetTitle: { fontFamily: FONT.display, color: C.cream, fontSize: 21, letterSpacing: -0.3, marginBottom: 14 },
+  preview: { width: "100%", height: 220, borderRadius: 16, marginBottom: 16 },
+  input: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, color: C.cream, fontSize: 15, fontFamily: FONT.body, marginBottom: 14 },
+  chip: { borderRadius: 999, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 13 },
+  viewer: { flex: 1, backgroundColor: "#000e", justifyContent: "center", padding: 16 },
+  viewerBar: { position: "absolute", top: 44, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", zIndex: 2 },
+  delBtn: { backgroundColor: C.red + "22", borderWidth: 1, borderColor: C.red + "66", borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14 },
+  viewerImg: { width: "100%", height: "62%", borderRadius: 16 },
+  viewerCaption: { color: "#fff", fontSize: 17, fontFamily: FONT.semibold, marginTop: 16 },
+  viewerMeta: { color: "#ffffffaa", fontSize: 13, marginTop: 6 },
+}));

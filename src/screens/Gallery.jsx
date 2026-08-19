@@ -1,0 +1,238 @@
+import { useState, useEffect, useRef } from "react";
+import { C, F } from "../theme.js";
+import { StatusBar, Label, Btn } from "../components/ui.jsx";
+import { useI18n, tripTitle } from "../i18n.js";
+import { addMemory, listMemories, deleteMemory, resizeImage } from "../gallery.js";
+import MemoryMap from "../components/MemoryMap.jsx";
+import { Camera, Save, Trash2, MapPin, TriangleAlert, LayoutGrid, Map } from "../icons.jsx";
+
+// Soft warning once the gallery grows large — photos live in the browser's
+// storage, which has limits; nudge the user to prune before it fills up.
+const GALLERY_WARN = 50;
+
+const fmtDay = (ts, locale) =>
+  new Date(ts).toLocaleDateString(locale === "zh" ? "zh-CN" : locale || "en", { day: "numeric", month: "short", year: "numeric" });
+
+// Compose overlay shown after a photo is picked: preview + caption + optional
+// link to one of the user's saved trips.
+function Compose({ photo, saved, onSave, onCancel }) {
+  const { t } = useI18n();
+  const [caption, setCaption] = useState("");
+  const [tripId, setTripId] = useState(saved[0]?.id || "");
+  const trip = saved.find((r) => r.id === tripId);
+
+  return (
+    <div onClick={onCancel} style={{
+      position: "absolute", inset: 0, background: "#000c", zIndex: 40,
+      display: "flex", alignItems: "flex-end", animation: "vai-pop .2s both",
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: "100%", background: C.surface, borderRadius: "26px 26px 0 0",
+        padding: "10px 22px 26px", animation: "vai-rise .25s both", maxHeight: "92%", overflowY: "auto",
+      }}>
+        <div style={{ width: 40, height: 5, background: C.border, borderRadius: 3, margin: "0 auto 16px" }} />
+        <div style={{ fontFamily: F.display, color: C.cream, fontSize: 21, fontWeight: 700, letterSpacing: -0.3, marginBottom: 14 }}>
+          <Camera size={19} style={{ verticalAlign: -3, marginRight: 7 }} />{t("galAddTitle")}
+        </div>
+
+        <img src={photo} alt="" style={{ width: "100%", borderRadius: 16, marginBottom: 16, maxHeight: 260, objectFit: "cover" }} />
+
+        <input
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder={t("galCaptionPh")}
+          style={{
+            width: "100%", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: "13px 14px", color: C.cream, fontSize: 15, fontFamily: "inherit", outline: "none", marginBottom: 14,
+          }}
+        />
+
+        {saved.length > 0 && (
+          <>
+            <Label color={C.muted}>{t("galLinkTrip")}</Label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 18px" }}>
+              {saved.map((r) => {
+                const on = r.id === tripId;
+                return (
+                  <button key={r.id} className="vai-press" onClick={() => setTripId(on ? "" : r.id)} style={{
+                    background: on ? C.gold : C.card, color: on ? C.bg : C.mutedLight,
+                    border: `1px solid ${on ? C.gold : C.border}`, borderRadius: 999,
+                    padding: "8px 13px", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}>{r.emoji} {r.destName}</button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <Btn onClick={() => onSave({ caption: caption.trim(), tripId: trip?.id || null, tripTitle: trip ? tripTitle(trip, t) : null })}>
+          <Save size={16} style={{ verticalAlign: -2.5, marginRight: 7 }} />{t("galSave")}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// Full-screen viewer for one memory, with delete.
+function Viewer({ memory, onClose, onDelete }) {
+  const { t, lang } = useI18n();
+  return (
+    <div onClick={onClose} style={{
+      position: "absolute", inset: 0, background: "#000d", zIndex: 45,
+      display: "flex", flexDirection: "column", animation: "vai-pop .2s both",
+    }}>
+      <div style={{ height: 44, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 16px" }}>
+        <button onClick={onClose} aria-label={t("back")} style={{ background: "none", border: "none", color: "#fff", fontSize: 26, cursor: "pointer" }}>✕</button>
+        <button onClick={() => onDelete(memory.id)} style={{
+          background: `${C.red}22`, border: `1px solid ${C.red}66`, color: C.red,
+          borderRadius: 999, padding: "7px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+        }}><Trash2 size={13} style={{ verticalAlign: -2, marginRight: 5 }} />{t("galDelete")}</button>
+      </div>
+      <div onClick={(e) => e.stopPropagation()} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 16px 24px" }}>
+        <img src={memory.dataUrl} alt={memory.caption || t("navGallery")} style={{ width: "100%", borderRadius: 16, maxHeight: "62%", objectFit: "contain" }} />
+        {memory.caption ? (
+          <div style={{ color: "#fff", fontSize: 17, fontWeight: 600, marginTop: 16 }}>{memory.caption}</div>
+        ) : null}
+        <div style={{ color: "#ffffffaa", fontSize: 13, marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>
+          {memory.tripTitle ? <><MapPin size={12} />{memory.tripTitle} · </> : null}{fmtDay(memory.ts, lang)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Gallery({ saved }) {
+  const { t, lang } = useI18n();
+  const [memories, setMemories] = useState(null); // null = loading
+  const [pending, setPending] = useState(null);   // a resized dataUrl awaiting caption
+  const [viewing, setViewing] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [view, setView] = useState("grid");        // grid | map
+  const fileRef = useRef(null);
+
+  const geoCount = (memories || []).filter((m) => Array.isArray(m.ll)).length;
+
+  const refresh = () => listMemories().then(setMemories).catch(() => setMemories([]));
+  useEffect(() => { refresh(); }, []);
+
+  const onPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (!file) return;
+    setBusy(true);
+    try {
+      const dataUrl = await resizeImage(file);
+      setPending(dataUrl);
+    } catch {
+      /* ignore bad image */
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async ({ caption, tripId, tripTitle: tt }) => {
+    const memory = {
+      id: `m${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+      ts: Date.now(), dataUrl: pending, caption, tripId, tripTitle: tt, stopName: null,
+    };
+    await addMemory(memory);
+    setPending(null);
+    refresh();
+  };
+
+  const remove = async (id) => {
+    await deleteMemory(id);
+    setViewing(null);
+    refresh();
+  };
+
+  return (
+    <>
+      <StatusBar />
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={onPick} style={{ display: "none" }} />
+
+      <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "4px 22px 24px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "6px 0 6px" }}>
+          <div style={{ fontFamily: F.display, color: C.cream, fontSize: 28, fontWeight: 700, letterSpacing: -0.4 }}>
+            {t("navGallery")}
+          </div>
+          <button className="vai-press" onClick={() => fileRef.current?.click()} disabled={busy} style={{
+            background: C.goldGrad, color: C.bg, border: "none", borderRadius: 999,
+            padding: "9px 15px", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit",
+            boxShadow: `0 8px 20px ${C.gold}44`, opacity: busy ? 0.6 : 1,
+          }}>{busy ? "…" : `＋ ${t("galAdd")}`}</button>
+        </div>
+        <div style={{ color: C.muted, fontSize: 13, marginBottom: 20 }}>{t("gallerySub")}</div>
+
+        {memories && memories.length >= GALLERY_WARN && (
+          <div style={{
+            background: `${C.gold}14`, border: `1px solid ${C.gold}44`, borderRadius: 14,
+            padding: "10px 14px", marginBottom: 16, color: C.gold, fontSize: 13, lineHeight: 1.45,
+          }}><TriangleAlert size={13} style={{ verticalAlign: -2, marginRight: 6 }} />{t("galLimitWarn", { n: memories.length })}</div>
+        )}
+
+        {memories && memories.length === 0 && (
+          <button onClick={() => fileRef.current?.click()} style={{
+            width: "100%", background: C.surface, border: `1.5px dashed ${C.gold}55`, borderRadius: 20,
+            padding: "42px 22px", textAlign: "center", cursor: "pointer", fontFamily: "inherit",
+          }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+              <Camera size={48} color={C.gold} strokeWidth={1.4} />
+            </div>
+            <div style={{ color: C.cream, fontSize: 16, fontWeight: 700, marginBottom: 4 }}>{t("galEmpty")}</div>
+            <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>{t("galEmptySub")}</div>
+          </button>
+        )}
+
+        {/* Grid / Map toggle — only when there are geotagged photos to map */}
+        {memories && memories.length > 0 && geoCount > 0 && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 16, background: C.card, borderRadius: 12, padding: 4 }}>
+            {[["grid", LayoutGrid, t("galGridView")], ["map", Map, t("galMapView")]].map(([v, TabIcon, label]) => (
+              <button key={v} onClick={() => setView(v)} style={{
+                flex: 1, background: view === v ? C.gold : "transparent",
+                color: view === v ? C.bg : C.mutedLight, border: "none", borderRadius: 9,
+                padding: "9px 0", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
+              }}><TabIcon size={14} />{label}</button>
+            ))}
+          </div>
+        )}
+
+        {memories && memories.length > 0 && view === "map" && geoCount > 0 && (
+          <div style={{ height: 380, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.border}` }}>
+            <MemoryMap memories={memories} onPick={(m) => setViewing(m)} />
+          </div>
+        )}
+
+        {memories && memories.length > 0 && view === "grid" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {memories.map((m) => (
+              <button key={m.id} className="vai-lift" onClick={() => setViewing(m)} style={{
+                background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+                overflow: "hidden", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: "inherit",
+                display: "flex", flexDirection: "column",
+              }}>
+                <div style={{ width: "100%", aspectRatio: "1 / 1", overflow: "hidden", background: C.surface }}>
+                  <img src={m.dataUrl} alt={m.caption || t("navGallery")} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+                <div style={{ padding: "10px 12px" }}>
+                  {m.caption ? (
+                    <div style={{ color: C.cream, fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.caption}</div>
+                  ) : (
+                    <div style={{ color: C.muted, fontSize: 14, fontStyle: "italic" }}>{t("galNoCaption")}</div>
+                  )}
+                  <div style={{ color: C.muted, fontSize: 11, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {m.tripTitle ? <><MapPin size={10} style={{ verticalAlign: -1.5, marginRight: 3 }} />{m.tripTitle}</> : fmtDay(m.ts, lang)}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {pending && <Compose photo={pending} saved={saved} onSave={save} onCancel={() => setPending(null)} />}
+      {viewing && <Viewer memory={viewing} onClose={() => setViewing(null)} onDelete={remove} />}
+    </>
+  );
+}

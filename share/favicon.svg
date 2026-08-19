@@ -1,0 +1,21 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Porcelain + antique-gold brand mark (matches the premium light theme). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F2EFE8"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#D9BE72"/>
+      <stop offset="1" stop-color="#A9862F"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="6" y="6" width="500" height="500" rx="106" fill="none" stroke="#EDE8DC" stroke-width="4"/>
+  <circle cx="256" cy="230" r="150" fill="none" stroke="#A9862F" stroke-opacity="0.20" stroke-width="6"/>
+  <circle cx="256" cy="230" r="110" fill="none" stroke="#A9862F" stroke-opacity="0.13" stroke-width="4"/>
+  <!-- location pin -->
+  <path d="M256 118c-57 0-103 46-103 103 0 74 103 173 103 173s103-99 103-173c0-57-46-103-103-103z" fill="url(#gold)"/>
+  <circle cx="256" cy="221" r="42" fill="#FBFAF7"/>
+  <circle cx="256" cy="221" r="18" fill="url(#gold)"/>
+</svg>

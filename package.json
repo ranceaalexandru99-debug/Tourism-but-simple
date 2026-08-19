@@ -1,0 +1,32 @@
+{
+  "name": "turism-dar-simplu",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/build-legal-pages.mjs && vite build",
+    "build:share": "vite build --mode single --outDir share --emptyOutDir",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "legal": "node scripts/build-legal-pages.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
+    "leaflet": "^1.9.4",
+    "lucide-react": "^1.23.0",
+    "lz-string": "^1.5.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.3",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.35.3",
+    "vite": "^8.1.3",
+    "vite-plugin-pwa": "^1.3.0",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.9"
+  }
+}

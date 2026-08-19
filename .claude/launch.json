@@ -1,0 +1,106 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["node_modules/vite/bin/vite.js", "--port", "5174", "--strictPort"],
+      "port": 5174
+    },
+    {
+      "name": "liber-vicii",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Aplicatii de vicii\\server.js"],
+      "port": 4197
+    },
+    {
+      "name": "quiz-fotbal",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Aplicatie Fotbal\\server.js"],
+      "port": 4173,
+      "autoPort": true
+    },
+    {
+      "name": "respiro-dev",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "D:\\Claude\\Aplicatie Mental Health\\node_modules\\vite\\bin\\vite.js",
+        "D:\\Claude\\Aplicatie Mental Health",
+        "--port", "5273", "--strictPort"
+      ],
+      "port": 5273
+    },
+    {
+      "name": "naru-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Naru WebSite\\server.js"],
+      "port": 4179
+    },
+    {
+      "name": "damici-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\D'Amici Ristorante\\server.js"],
+      "port": 4181
+    },
+    {
+      "name": "tools-meseriasi",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Tools pentru meseriasi\\server.js"],
+      "port": 4183
+    },
+    {
+      "name": "cos-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\COS Timisoara\\server.js"],
+      "port": 4187
+    },
+    {
+      "name": "bgvest-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\BG Vest Construct\\server.js"],
+      "port": 4189
+    },
+    {
+      "name": "casambient-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\CASAmbient WebSite\\server.js"],
+      "port": 4185
+    },
+    {
+      "name": "odorgicu-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Odor Gicu Construct\\server.js"],
+      "port": 4191
+    },
+    {
+      "name": "maya-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Maya Install WebSite\\server.js"],
+      "port": 4193
+    },
+    {
+      "name": "troppo-site",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Troppo Buono\\server.js"],
+      "port": 4195
+    },
+    {
+      "name": "tracker-evenimente",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Tracker de evenimente\\server.js"],
+      "port": 4199
+    },
+    {
+      "name": "cuceritorii",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Cuceritorii\\server\\index.js"],
+      "port": 4201
+    },
+    {
+      "name": "cuceritorii-fast",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["D:\\Claude\\Cuceritorii\\scripts\\fast-server.js"],
+      "port": 4202
+    }
+  ]
+}
