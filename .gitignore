@@ -17,3 +17,6 @@ mobile-native/.expo/
 mobile-native/dist/
 mobile-native/android/
 mobile-native/ios/
+
+# Supabase CLI scratch
+supabase/.temp/
