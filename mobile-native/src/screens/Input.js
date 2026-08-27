@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
@@ -13,7 +13,13 @@ export default function Input({ initial, onBack, onSubmit }) {
   const ready = text.trim().length > 0;
 
   return (
-    <View style={styles.wrap}>
+    // The field is autoFocus, so the keyboard is up the moment this screen
+    // opens — and "Continue" sits at the bottom. Without this the user could
+    // type a destination and have no way to reach the button on iOS.
+    <KeyboardAvoidingView
+      style={styles.wrap}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <View style={styles.header}>
         <Pressable onPress={onBack} hitSlop={12}>
           <Text style={{ color: C.cream, fontSize: 26 }}>‹</Text>
@@ -40,7 +46,7 @@ export default function Input({ initial, onBack, onSubmit }) {
           {t("continue")} →
         </Btn>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

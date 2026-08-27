@@ -19,17 +19,21 @@ export default defineConfig(({ mode }) => ({
           injectRegister: "script",
           workbox: {
             globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
-            // POI files are fetched lazily per city — too many to precache
-            // (500+ ≈ 6 MB), so cache them as they're used. StaleWhileRevalidate:
-            // offline serves the cached copy (saved trips regenerate with real
-            // data), online silently refreshes (the index grows as the batch
-            // adds cities).
+            // City and POI data now comes from Supabase rather than static
+            // /pois/*.json files, so cache the read queries as they're used.
+            // StaleWhileRevalidate: offline serves the cached copy, online
+            // silently refreshes as the dataset is corrected.
+            //
+            // Scoped to the two public, read-only tables ON PURPOSE. A pattern
+            // covering the whole Supabase origin would also cache /auth/v1/*,
+            // putting session responses into a shared cache — never do that.
             runtimeCaching: [{
-              urlPattern: /\/pois\/[^/]+\.json$/,
+              urlPattern: /\/rest\/v1\/(cities|city_pois)\?/,
               handler: "StaleWhileRevalidate",
               options: {
-                cacheName: "pois-v1",
-                expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 180 },
+                cacheName: "supabase-cities-v1",
+                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+                cacheableResponse: { statuses: [200] },
               },
             }],
           },
@@ -52,6 +56,15 @@ export default defineConfig(({ mode }) => ({
           },
         })]),
   ],
+  // `vite preview` defaults to port 4173 — and so does every other Vite project
+  // on this machine. Serving this build there registered its PWA service worker
+  // against http://localhost:4173, an origin they all share, and it then served
+  // this app's cached shell in place of whatever else was previewed on that
+  // port. Pin a port of our own, and refuse to start rather than silently drift
+  // onto someone else's.
+  preview: {
+    port: 5175, strictPort: true, host: true, allowedHosts: true,
+  },
   server: {
     port: 5173, open: true, host: true, allowedHosts: true,
     // Route /api to the local API server (npm run server) so the browser sees

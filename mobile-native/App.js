@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { View, SafeAreaView, ActivityIndicator, Platform, StatusBar as RNStatusBar } from "react-native";
+import { View, ActivityIndicator } from "react-native";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 
 import { hydrate } from "./src/polyfill.js";
 import { installMonitor } from "./src/lib/monitor.js";
+import { initPremium } from "./src/lib/premium.js";
 import { FONT_MAP } from "./src/fonts.js";
 import { ThemeProvider, useTheme, C } from "./src/lib/theme.js";
 import { I18nProvider } from "./src/lib/i18n.js";
@@ -92,10 +94,17 @@ function Root() {
 
   const showTabs = TABS.includes(screen);
   // Full-bleed screens (cover art / centered logos) go edge-to-edge; content
-  // screens use SafeAreaView (iOS notch) + an Android status-bar inset.
+  // screens are inset away from the system UI.
   const fullBleed = screen === "route" || screen === "splash" || screen === "loading";
-  const Container = fullBleed ? View : SafeAreaView;
-  const androidInset = !fullBleed && Platform.OS === "android" ? RNStatusBar.currentHeight || 0 : 0;
+  // Real insets on both platforms. This used to be React Native's own
+  // SafeAreaView plus a hand-rolled Android status-bar offset — but that
+  // SafeAreaView is iOS-only (a no-op on Android), and nothing accounted for
+  // the BOTTOM at all. Under Android 15's mandatory edge-to-edge that put the
+  // tab bar underneath the gesture pill, where it can't be tapped.
+  const insets = useSafeAreaInsets();
+  const pad = fullBleed
+    ? { paddingTop: 0, paddingBottom: 0 }
+    : { paddingTop: insets.top, paddingBottom: insets.bottom };
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -104,7 +113,7 @@ function Root() {
           was always false — white status icons on a white bar for every user
           on the default theme. */}
       <StatusBar style={mode === "light" ? "dark" : "light"} />
-      <Container style={{ flex: 1, paddingTop: androidInset }}>
+      <View style={{ flex: 1, ...pad }}>
         {screen === "splash" && <Splash onDone={() => go(user ? "home" : "welcome")} />}
         {screen === "welcome" && <Welcome onDone={() => go("auth")} />}
         {screen === "auth" && <Auth onAuth={handleAuth} />}
@@ -133,7 +142,7 @@ function Root() {
           <Route route={route} onBack={() => go("home")} onSaved={saveRoute} />
         )}
         {showTabs && <BottomNav active={screen} onGo={go} badge={saved.length} />}
-      </Container>
+      </View>
       {!consent && <ConsentBanner onAccept={acceptConsent} />}
     </View>
   );
@@ -143,7 +152,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [fontsLoaded] = useFonts(FONT_MAP);
 
-  useEffect(() => { hydrate().finally(() => setReady(true)); }, []);
+  useEffect(() => { hydrate().finally(() => { initPremium(); setReady(true); }); }, []);
 
   if (!ready || !fontsLoaded) {
     // Porcelain + antique gold to match the default (light) theme — the real
@@ -157,11 +166,14 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <ThemeProvider>
-        <I18nProvider>
-          <Root />
-        </I18nProvider>
-      </ThemeProvider>
+      {/* Must sit above anything calling useSafeAreaInsets(). */}
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <I18nProvider>
+            <Root />
+          </I18nProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }

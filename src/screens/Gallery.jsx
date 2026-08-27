@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { C, F } from "../theme.js";
 import { StatusBar, Label, Btn } from "../components/ui.jsx";
 import { useI18n, tripTitle } from "../i18n.js";
 import { addMemory, listMemories, deleteMemory, resizeImage } from "../gallery.js";
+import { buildAlbum, hasEnoughForAlbum, MIN_PHOTOS } from "../album.js";
+import { printAlbum } from "../exporters.js";
+import { isPremium } from "../premium.js";
 import MemoryMap from "../components/MemoryMap.jsx";
-import { Camera, Save, Trash2, MapPin, TriangleAlert, LayoutGrid, Map } from "../icons.jsx";
+import { Camera, Save, Trash2, MapPin, TriangleAlert, LayoutGrid, Map, Lock } from "../icons.jsx";
 
 // Soft warning once the gallery grows large — photos live in the browser's
 // storage, which has limits; nudge the user to prune before it fills up.
@@ -146,6 +149,45 @@ export default function Gallery({ saved }) {
     refresh();
   };
 
+  // Which saved trips actually have enough photos here to make an album. A trip
+  // whose photos were deleted, or one that was itself deleted, must not appear —
+  // offering a button that can only fail is worse than offering nothing.
+  const albumTrips = useMemo(() => {
+    if (!memories?.length) return [];
+    // A plain object, not a Map: this module imports lucide's `Map` icon, which
+    // shadows the global constructor — `new Map()` here tried to instantiate a
+    // React component and crashed the whole screen.
+    const counts = {};
+    for (const m of memories) {
+      if (m.tripId) counts[m.tripId] = (counts[m.tripId] || 0) + 1;
+    }
+    return (saved || [])
+      .map((route) => ({ route, count: counts[route.id] || 0 }))
+      .filter((x) => x.count >= MIN_PHOTOS)
+      .sort((a, b) => b.count - a.count);
+  }, [memories, saved]);
+
+  const [picking, setPicking] = useState(false);
+  const [albumBusy, setAlbumBusy] = useState(false);
+  const [albumMsg, setAlbumMsg] = useState("");
+
+  const makeAlbum = async (route) => {
+    if (!isPremium()) { setAlbumMsg(t("albumLocked")); return; }
+    setAlbumBusy(true);
+    setAlbumMsg("");
+    try {
+      const album = buildAlbum(route, memories || []);
+      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew", { n: MIN_PHOTOS })); return; }
+      await printAlbum(album, t, tripTitle(route, t), (iso) =>
+        new Date(iso + "T00:00:00").toLocaleDateString(lang === "zh" ? "zh-CN" : lang || "en",
+          { weekday: "short", day: "numeric", month: "short" }));
+    } catch {
+      setAlbumMsg(t("albumFailed"));
+    } finally {
+      setAlbumBusy(false);
+    }
+  };
+
   return (
     <>
       <StatusBar />
@@ -162,7 +204,74 @@ export default function Gallery({ saved }) {
             boxShadow: `0 8px 20px ${C.gold}44`, opacity: busy ? 0.6 : 1,
           }}>{busy ? "…" : `＋ ${t("galAdd")}`}</button>
         </div>
-        <div style={{ color: C.muted, fontSize: 13, marginBottom: 20 }}>{t("gallerySub")}</div>
+        <div style={{ color: C.muted, fontSize: 13, marginBottom: 14 }}>{t("gallerySub")}</div>
+
+        {/* Album straight from the gallery — this is where the photos are, so
+            it is where someone thinks to turn them into something. An album is
+            built per trip, because the day-and-stop structure comes from the
+            itinerary; photos with no trip cannot be laid out that way. */}
+        {/* When no trip qualifies yet, say what is missing instead of hiding the
+            feature. A button that silently fails to exist is indistinguishable
+            from one that is broken — and the requirement (link photos to a
+            saved trip) is not something anyone would guess. */}
+        {memories && memories.length > 0 && albumTrips.length === 0 && (
+          <div style={{
+            marginBottom: 18, background: C.card, border: `1px dashed ${C.border}`,
+            borderRadius: 14, padding: "12px 14px",
+            display: "flex", alignItems: "flex-start", gap: 10,
+          }}>
+            <Camera size={16} color={C.muted} style={{ marginTop: 2, flexShrink: 0 }} />
+            <div style={{ color: C.muted, fontSize: 13, lineHeight: 1.5 }}>
+              {t("galAlbumNeeds", { n: MIN_PHOTOS })}
+            </div>
+          </div>
+        )}
+
+        {albumTrips.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <button
+              className="vai-press"
+              onClick={() => (albumTrips.length === 1 ? makeAlbum(albumTrips[0].route) : setPicking((p) => !p))}
+              disabled={albumBusy}
+              style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                background: "transparent", border: `1px solid ${C.gold}55`, borderRadius: 14,
+                padding: "11px 14px", cursor: "pointer", fontFamily: "inherit",
+                color: C.gold, fontSize: 14, fontWeight: 700, opacity: albumBusy ? 0.6 : 1,
+              }}
+            >
+              {isPremium() ? <Camera size={16} /> : <Lock size={16} />}
+              {albumBusy ? t("albumWorking") : t("galMakeAlbum")}
+            </button>
+
+            {picking && (
+              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                {albumTrips.map(({ route, count }) => (
+                  <button
+                    key={route.id}
+                    className="vai-press"
+                    onClick={() => { setPicking(false); makeAlbum(route); }}
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+                      padding: "11px 14px", cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                    }}
+                  >
+                    <span style={{ color: C.cream, fontSize: 14, fontWeight: 600 }}>{tripTitle(route, t)}</span>
+                    <span style={{ color: C.muted, fontSize: 12 }}>{count} {t("albumPhotos")}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {!!albumMsg && (
+              <div style={{
+                marginTop: 10, background: `${C.gold}14`, border: `1px solid ${C.gold}44`,
+                borderRadius: 12, padding: "10px 12px", color: C.gold, fontSize: 13, lineHeight: 1.5,
+              }}>{albumMsg}</div>
+            )}
+          </div>
+        )}
 
         {memories && memories.length >= GALLERY_WARN && (
           <div style={{

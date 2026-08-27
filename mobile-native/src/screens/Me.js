@@ -2,16 +2,18 @@ import { useState } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { C, useTheme, THEME_ACCENTS, themedStyles } from "../lib/theme.js";
 import { useI18n, LANGS } from "../lib/i18n.js";
+import { isPremium, unlockForTesting } from "../lib/premium.js";
 import { FONT } from "../fonts.js";
 import { Label } from "../components/ui.js";
 import LegalSheet from "../components/LegalSheet.js";
-import { User, Smile, Palette, Sun, Moon, Sparkles, Globe, Scale, Trash2, KeyRound, LogOut } from "../icons.js";
+import { User, Smile, Palette, Sun, Moon, Sparkles, Globe, Scale, Trash2, KeyRound, LogOut, Gem } from "../icons.js";
 
 export default function Me({ user, saved, onLogout, onErase }) {
   const { t, lang, setLang } = useI18n();
   const { mode, accent, setMode, setAccent } = useTheme();
   const name = user?.name || t("traveler");
   const [legal, setLegal] = useState(false);
+  const [devPremium, setDevPremium] = useState(isPremium());
   const [armErase, setArmErase] = useState(false);
 
   return (
@@ -40,7 +42,7 @@ export default function Me({ user, saved, onLogout, onErase }) {
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
             {["light", "dark"].map((m) => (
-              <Pressable key={m} onPress={() => setMode(m)} style={[styles.seg, mode === m && { backgroundColor: C.gold }]}>
+              <Pressable key={m} onPress={() => setMode(m)} accessibilityLabel={t(m === "light" ? "themeLight" : "themeDark")} accessibilityState={{ selected: mode === m }} style={[styles.seg, mode === m && { backgroundColor: C.gold }]}>
                 {m === "light"
                   ? <Sun size={15} color={mode === m ? C.bg : C.mutedLight} />
                   : <Moon size={15} color={mode === m ? C.bg : C.mutedLight} />}
@@ -82,6 +84,25 @@ export default function Me({ user, saved, onLogout, onErase }) {
         </View>
         <Text style={{ color: C.muted, fontSize: 18 }}>›</Text>
       </Pressable>
+
+      {/* Development only. __DEV__ is false in every release build, so this row
+          cannot reach a user — and it grants the entitlement locally without
+          touching the purchase flow, which is the only honest way to exercise
+          the paid screens before billing exists. */}
+      {__DEV__ && (
+        <Pressable
+          onPress={() => { unlockForTesting(!devPremium); setDevPremium((v) => !v); }}
+          style={[styles.legalRow, { borderColor: C.purple + "55" }]}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
+            <Gem size={15} color={C.purple} />
+            <Text style={{ color: C.purple, fontSize: 14 }}>
+              DEV · premium {devPremium ? "ON" : "OFF"}
+            </Text>
+          </View>
+          <Text style={{ color: C.purple, fontSize: 18 }}>›</Text>
+        </Pressable>
+      )}
 
       {/* Danger zone: erase all on-device data (two-step confirm) */}
       {onErase && (

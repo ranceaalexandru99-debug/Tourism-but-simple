@@ -1,7 +1,19 @@
 node_modules/
 dist/
+share/
 .env
 .env.production
 .env.single
 .env.local
 *.log
+
+# Generated POI data (~30 MB and growing). Rebuilt by scripts/batch-pois.mjs and
+# uploaded to Supabase by scripts/migrate-cities-to-supabase.mjs — derived data,
+# not source. Keeping it out of history also keeps clones small.
+data/
+
+# Expo / React Native build output
+mobile-native/.expo/
+mobile-native/dist/
+mobile-native/android/
+mobile-native/ios/

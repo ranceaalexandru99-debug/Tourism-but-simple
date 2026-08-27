@@ -13,14 +13,49 @@
 // The prompt and schema come from src/shared/routeSchema.js, the same module
 // the client imports, so the two sides cannot drift.
 
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@supabase/supabase-js";
 import {
   DEST_SCHEMA, MODEL, MAX_TOKENS, SYSTEM_PROMPT, buildPrompt, validatePrefs,
 } from "../src/shared/routeSchema.js";
 
+// Read .env by hand. This is a plain Node process, not a Vite one, so nothing
+// loads it automatically — without this the server started perfectly happily
+// and reported "AI DISABLED", with account deletion and POI contributions
+// silently unauthenticated, even though the keys were sitting in the file.
+//
+// Real environment variables always win, so a hosting platform's own config
+// (Vercel, Render, Fly) overrides the file rather than fighting it, and a
+// missing .env in production is not an error.
+function loadEnv() {
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+  try {
+    for (const line of fs.readFileSync(path.join(root, ".env"), "utf8").split("\n")) {
+      const m = line.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
+    }
+  } catch { /* no .env — rely on the real environment */ }
+}
+loadEnv();
+
 const PORT = Number(process.env.PORT) || 8787;
 const API_KEY = process.env.ANTHROPIC_API_KEY;
+
+// Supabase admin credentials. SUPABASE_SERVICE_ROLE_KEY bypasses Row Level
+// Security completely — it must never be given a VITE_ prefix, never be sent to
+// a browser, and never be logged. It exists here for exactly one operation:
+// deleting the account of a caller who has proven who they are.
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const admin = SUPABASE_URL && SERVICE_ROLE_KEY
+  ? createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
 // Comma-separated list of allowed browser origins for production. In dev the
 // Vite proxy makes requests same-origin, so nothing is needed there.
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
@@ -69,7 +104,136 @@ const client = API_KEY
   ? new Anthropic({ apiKey: API_KEY, timeout: 45_000, maxRetries: 0 })
   : null;
 
-app.get("/api/health", (_req, res) => res.json({ ok: true, ai: Boolean(client) }));
+app.get("/api/health", (_req, res) =>
+  res.json({ ok: true, ai: Boolean(client), accountDeletion: Boolean(admin) }));
+
+// Share a city's freshly fetched OpenStreetMap POIs with everyone else.
+//
+// This is the point of putting cities in a database. Today the first person to
+// plan a trip to an uncovered city waits 5-25s for Overpass, and that work is
+// thrown away — the next person waits again. Storing the result turns per-user
+// effort into shared coverage, which grows on its own from ~490 cities toward
+// the full 5000 as people explore.
+//
+// It runs on the SERVER, not from the browser, on purpose: the publishable key
+// has no write access, and if it did, anyone who read the bundle could inject
+// fabricated attractions into every user's itinerary. Here the payload is
+// validated, size-capped, rate-limited, and can never overwrite the curated
+// rows.
+app.post("/api/contribute-pois", async (req, res) => {
+  if (!admin) {
+    return res.status(503).json({ error: "not_configured", message: "Supabase admin credentials are not set." });
+  }
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip;
+  if (rateLimited(ip)) {
+    return res.status(429).json({ error: "rate_limited", message: "Too many requests, try again shortly." });
+  }
+
+  const { cityId, pois } = req.body || {};
+  if (typeof cityId !== "string" || !/^Q\d+$/.test(cityId)) {
+    return res.status(400).json({ error: "bad_request", message: "cityId must be a Wikidata Q-id." });
+  }
+  if (!Array.isArray(pois) || pois.length < 6 || pois.length > 200) {
+    return res.status(400).json({ error: "bad_request", message: "pois must hold between 6 and 200 entries." });
+  }
+  // Keep only fields the app reads, with the shapes it expects. Anything else a
+  // client sends is dropped rather than trusted into the database.
+  const CATEGORIES = new Set(["museum", "landmark", "attraction", "viewpoint", "park", "shopping", "restaurant", "cafe", "bar"]);
+  const clean = [];
+  for (const p of pois) {
+    if (!p || typeof p.name !== "string") continue;
+    const name = p.name.trim().slice(0, 120);
+    if (name.length < 2 || !CATEGORIES.has(p.category)) continue;
+    const [lat, lon] = Array.isArray(p.ll) ? p.ll : [];
+    if (typeof lat !== "number" || typeof lon !== "number") continue;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+    clean.push({
+      name, category: p.category,
+      tags: Array.isArray(p.tags) ? p.tags.slice(0, 4).filter((t) => typeof t === "string") : [],
+      ll: [lat, lon],
+      wiki: typeof p.wiki === "string" ? p.wiki.slice(0, 200) : undefined,
+      hours: typeof p.hours === "string" ? p.hours.slice(0, 200) : undefined,
+      website: typeof p.website === "string" ? p.website.slice(0, 300) : undefined,
+      img: typeof p.img === "string" ? p.img.slice(0, 300) : undefined,
+    });
+  }
+  if (clean.length < 6) {
+    return res.status(400).json({ error: "bad_request", message: "Too few usable POIs after validation." });
+  }
+
+  try {
+    // The city must already exist in the index — this endpoint contributes
+    // POIs, it does not invent cities.
+    const { data: city } = await admin.from("cities").select("id").eq("id", cityId).maybeSingle();
+    if (!city) return res.status(404).json({ error: "unknown_city", message: "No such city in the index." });
+
+    // Never overwrite curated data with a crowd-sourced fetch: only insert when
+    // the city has no row, or when the existing row is itself 'osm-live'.
+    const { data: existing } = await admin.from("city_pois").select("source").eq("city_id", cityId).maybeSingle();
+    if (existing && existing.source !== "osm-live") {
+      return res.json({ ok: true, stored: false, reason: "curated_data_present" });
+    }
+
+    const { error } = await admin.from("city_pois").upsert({
+      city_id: cityId,
+      source: "osm-live",
+      pois: clean,
+      generated_at: new Date().toISOString().slice(0, 10),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "city_id" });
+    if (error) {
+      console.error("[api] POI contribution failed:", error.message);
+      return res.status(502).json({ error: "store_failed", message: "Could not store POIs." });
+    }
+    return res.json({ ok: true, stored: true, count: clean.length });
+  } catch (err) {
+    console.error("[api] POI contribution error:", err);
+    return res.status(500).json({ error: "server_error", message: "Contribution failed." });
+  }
+});
+
+// Permanently delete the caller's own account.
+//
+// Both stores require an in-app way to delete an account, and Supabase only
+// allows it through the admin API, which needs the service_role key — so it
+// cannot happen in the browser.
+//
+// The security rule here: the user id comes from VERIFYING the caller's access
+// token, never from the request body. Accepting an id from the client would let
+// anyone with a valid session delete any other account.
+app.post("/api/delete-account", async (req, res) => {
+  if (!admin) {
+    return res.status(503).json({ error: "not_configured", message: "SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set on the server." });
+  }
+  const auth = req.headers.authorization || "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  if (!token) return res.status(401).json({ error: "unauthorized", message: "Missing bearer token." });
+
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip;
+  if (rateLimited(ip)) {
+    return res.status(429).json({ error: "rate_limited", message: "Too many requests, try again shortly." });
+  }
+
+  try {
+    // Ask Supabase who this token belongs to. An expired, forged or revoked
+    // token yields no user, and nothing is deleted.
+    const { data, error } = await admin.auth.getUser(token);
+    const userId = data?.user?.id;
+    if (error || !userId) {
+      return res.status(401).json({ error: "unauthorized", message: "Invalid or expired session." });
+    }
+
+    const { error: delError } = await admin.auth.admin.deleteUser(userId);
+    if (delError) {
+      console.error("[api] account deletion failed:", delError.message);
+      return res.status(502).json({ error: "delete_failed", message: "Could not delete the account." });
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("[api] account deletion error:", err);
+    return res.status(500).json({ error: "server_error", message: "Account deletion failed." });
+  }
+});
 
 app.post("/api/generate-route", async (req, res) => {
   // Signals the client to stop asking and stay on its local engine, instead of

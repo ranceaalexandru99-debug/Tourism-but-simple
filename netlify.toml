@@ -1,0 +1,28 @@
+# Netlify build configuration.
+#
+# Committed rather than set in the dashboard so the deploy is reproducible and
+# reviewable: what builds the site is visible in the repo, not in someone's
+# browser tab.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Security headers live in public/_headers, which Vite copies into dist/ and
+# Netlify reads from there. They are NOT duplicated here — two sources for the
+# same policy is how they drift, and the CSP already had to be fixed once when
+# it silently blocked every Supabase call.
+
+# Deliberately no catch-all rewrite to index.html.
+#
+# The app never changes the URL path — shared trips live in the hash
+# (`#tripz=`) — so nothing needs rewriting, while a catch-all would make
+# /api/* answer 200 with HTML instead of 404. The client reads a 404 as
+# "no API server here" and stops asking; an HTML 200 would instead fail JSON
+# parsing on every attempt and keep reporting that the AI failed.
+#
+# The legal pages (privacy.html, terms.html, delete-account.html) are real
+# files generated at build time and are served directly.

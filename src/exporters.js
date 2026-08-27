@@ -1,3 +1,5 @@
+import { buildAlbumHtml, albumLabels } from "./albumHtml.js";
+import { shrinkAlbumPhotos } from "./albumImages.js";
 // Export helpers: an .ics calendar file and a clean printable itinerary (PDF
 // via the browser's print dialog). No dependencies.
 
@@ -72,9 +74,6 @@ const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "
 // Opens a clean, print-optimised itinerary in a new tab and triggers print
 // (the user picks "Save as PDF"). Localised via the passed t() and title.
 export function printItinerary(route, t, title, fmtDate) {
-  const w = window.open("", "_blank");
-  if (!w) return;
-
   const days = route.itinerary.map((day) => {
     const dateLabel = day.date && fmtDate ? esc(fmtDate(day.date)) : "";
     const stops = day.stops.map((s) => `
@@ -94,7 +93,7 @@ export function printItinerary(route, t, title, fmtDate) {
       </section>`;
   }).join("");
 
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+  return printHtml(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
     <style>
       * { box-sizing: border-box; }
       /* Porcelain + antique-gold palette — matches the app's premium light theme. */
@@ -122,7 +121,73 @@ export function printItinerary(route, t, title, fmtDate) {
     ${days}
     <p class="foot">Turism, dar simplu! — ${esc(t("tagline"))}</p>
     </body></html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(() => { try { w.print(); } catch {} }, 350);
+}
+
+// ---------------------------------------------------------------- album -----
+// Opens the printable album. The HTML itself comes from albumHtml.js, shared
+// verbatim with the native app so the two can never drift — the same print
+// route as the itinerary, and for the same reason: no library, and the photos
+// never leave the device.
+export async function printAlbum(album, t, title, fmtDate) {
+  if (!album) throw new Error("noalbum");
+
+  // Printed from a hidden same-page iframe, NOT a popup window.
+  //
+  // The popup version could not work on a phone: shrinking the photos is async,
+  // so by the time window.open() ran it was no longer inside the click that
+  // started it, and every mobile browser blocks that. It returned null, the
+  // function returned silently, and the button did nothing at all — no album,
+  // no error, nothing to tell the user what had happened.
+  //
+  // An iframe needs no popup permission and no user gesture, so the async work
+  // can happen first. Anything that still goes wrong throws, so the caller can
+  // say so instead of failing quietly.
+  const sized = await shrinkAlbumPhotos(album);
+  await printHtml(buildAlbumHtml(sized, albumLabels(sized, t, title, fmtDate)));
+}
+
+// Renders `html` in a hidden same-page iframe and opens the print dialog on it.
+// Throws if the document cannot be prepared, so the caller can report it.
+async function printHtml(html) {
+  const frame = document.createElement("iframe");
+  // Off-screen rather than display:none or hidden — a frame with no layout box
+  // does not paint, and printing it yields blank pages.
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;";
+  document.body.appendChild(frame);
+
+  const cleanup = () => { try { frame.remove(); } catch {} };
+
+  try {
+    await new Promise((resolve, reject) => {
+      const failed = setTimeout(() => reject(new Error("timeout")), 20000);
+      frame.onload = () => { clearTimeout(failed); resolve(); };
+      frame.onerror = () => { clearTimeout(failed); reject(new Error("frame")); };
+      frame.srcdoc = html;
+    });
+
+    const win = frame.contentWindow;
+    if (!win) throw new Error("noframe");
+
+    // Wait for the photos themselves. The load event fires for the document,
+    // but inline data URLs can still be decoding — printing then gives a page
+    // of empty boxes, which is what the old 800ms guess was trying to avoid.
+    const imgs = [...(win.document.images || [])];
+    await Promise.all(imgs.map((img) => (
+      img.complete ? Promise.resolve() : new Promise((res) => {
+        img.addEventListener("load", res, { once: true });
+        img.addEventListener("error", res, { once: true });
+      })
+    )));
+
+    win.focus();
+    win.print();
+  } catch (e) {
+    cleanup();
+    throw e;
+  }
+
+  // Kept alive briefly: some browsers run print() asynchronously and print a
+  // blank page if the frame is removed while the dialog is still open.
+  setTimeout(cleanup, 60000);
 }

@@ -86,7 +86,7 @@ export default function StopDetail({ stop, prevStop, onClose, onToggleDone, onRa
                     color: C.muted, cursor: "pointer", lineHeight: 0, padding: 6,
                   }}><X size={20} /></button>
                 </div>
-        <PoiImage name={stop.name} wiki={stop.wiki} img={stop.img} context={destName} credit emoji={stop.emoji} tags={stop.tags} height={170} radius={18} fontSize={64} style={{ marginBottom: 16 }} />
+        <PoiImage name={stop.name} wiki={stop.wiki} img={stop.img} category={stop.category} context={destName} credit emoji={stop.emoji} tags={stop.tags} height={170} radius={18} fontSize={64} style={{ marginBottom: 16 }} />
 
         <div style={{ fontFamily: F.display, color: C.cream, fontSize: 26, fontWeight: 700, letterSpacing: -0.4 }}>{stop.name}</div>
         <div style={{ color: C.gold, fontSize: 14, marginTop: 4, marginBottom: 16, display: "flex", alignItems: "center", gap: 5 }}>
@@ -95,7 +95,9 @@ export default function StopDetail({ stop, prevStop, onClose, onToggleDone, onRa
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
           {[
-            { Icon: Clock, txt: stop.hours, warn: stop.unverified },
+            // "~" for hours too: nightlife is barely mapped for opening times,
+            // so a bar or club often shows a typical range rather than its own.
+            { Icon: Clock, txt: `${stop.hoursEstimated ? "~" : ""}${stop.hours}`, warn: stop.unverified },
             // "~€12" when the price is a per-category estimate (OSM has no
             // price for this place) — never present a guess as a fact.
             { Icon: Ticket, txt: stop.cost > 0 ? `${stop.costEstimated ? "~" : ""}€${stop.cost}` : t("free"), warn: stop.unverified },

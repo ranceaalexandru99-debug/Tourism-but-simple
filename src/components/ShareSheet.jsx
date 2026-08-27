@@ -5,9 +5,13 @@ import LZString from "lz-string";
 import { sanitizeRouteForShare } from "../shareCodec.js";
 import { C, F } from "../theme.js";
 import { useI18n, tripTitle } from "../i18n.js";
-import { downloadICS, printItinerary } from "../exporters.js";
+import { downloadICS, printItinerary, printAlbum } from "../exporters.js";
+import { listMemories } from "../gallery.js";
+import { buildAlbum, hasEnoughForAlbum } from "../album.js";
+import { isPremium } from "../premium.js";
+import { renderShort, canRenderShort, saveOrShareShort } from "../shortVideo.js";
 import { renderShareCard, canvasToBlob, shareOrDownload } from "../shareImage.js";
-import { FileText, Calendar, QrCode, Link2, MessageCircle, Mail, Share2, Check, Image as ImageIcon, Loader , X} from "../icons.jsx";
+import { FileText, Calendar, QrCode, Link2, MessageCircle, Mail, Share2, Check, Image as ImageIcon, Loader, Lock, Camera, Film, X } from "../icons.jsx";
 
 // Build a self-contained URL that encodes the whole trip in the hash. When
 // opened, App decodes it and shows the itinerary — no server, no account.
@@ -69,7 +73,60 @@ export default function ShareSheet({ route, onClose, printCtx }) {
     } catch (e) { console.warn("QR generation failed", e); }
   };
 
+  // Build the album on demand: reading every photo out of IndexedDB is not
+  // something to do just because the share sheet opened.
+  const [albumBusy, setAlbumBusy] = useState(false);
+  const [albumMsg, setAlbumMsg] = useState("");
+  const makeAlbum = async () => {
+    if (!isPremium()) { setAlbumMsg(t("albumLocked")); return; }
+    setAlbumBusy(true);
+    setAlbumMsg("");
+    try {
+      const album = buildAlbum(route, await listMemories());
+      // Say why rather than opening an empty document — "nothing happened" is
+      // the least helpful outcome for a feature someone paid for.
+      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew")); return; }
+      await printAlbum(album, printCtx.t, title, printCtx.fmtDate);
+    } catch {
+      setAlbumMsg(t("albumFailed"));
+    } finally {
+      setAlbumBusy(false);
+    }
+  };
+
+  // Rendering runs in real time — MediaRecorder encodes a live canvas stream —
+  // so a ~35s short takes ~35s to make. Without a percentage on screen that is
+  // indistinguishable from a hung app.
+  const [shortPct, setShortPct] = useState(null);
+  const shortAbort = useRef(null);
+  const makeShort = async () => {
+    if (!isPremium()) { setAlbumMsg(t("albumLocked")); return; }
+    if (!canRenderShort()) { setAlbumMsg(t("shortUnsupported")); return; }
+    setAlbumMsg("");
+    setShortPct(0);
+    const ctrl = new AbortController();
+    shortAbort.current = ctrl;
+    try {
+      const album = buildAlbum(route, await listMemories());
+      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew")); return; }
+      const blob = await renderShort(album, {
+        title: route.destName,
+        subtitle: t("albumPhotos") === "photos" ? `${album.photoCount} photos` : `${album.photoCount} ${t("albumPhotos")}`,
+        dayLabel: (n) => t("day", { n }),
+        outro: "Turism, dar simplu!",
+      }, { onProgress: setShortPct, signal: ctrl.signal });
+      await saveOrShareShort(blob, `${route.destName.replace(/\s+/g, "-").toLowerCase()}.mp4`);
+    } catch (e) {
+      if (e?.message !== "aborted") setAlbumMsg(t("shortFailed"));
+    } finally {
+      setShortPct(null);
+      shortAbort.current = null;
+    }
+  };
+
   const opts = [
+    { id: "album", label: t("shareAlbum"), Icon: isPremium() ? Camera : Lock, action: makeAlbum, busy: albumBusy },
+    { id: "short", label: t("shareShort"), Icon: isPremium() ? Film : Lock, action: makeShort, busy: shortPct !== null },
     { id: "image", label: t("shareImage"), Icon: ImageIcon, action: showPoster, busy: posterBusy },
     { id: "pdf", label: t("sharePdf"), Icon: FileText, action: () => printItinerary(route, printCtx.t, title, printCtx.fmtDate) },
     { id: "cal", label: t("shareCalendar"), Icon: Calendar, action: () => downloadICS(route) },
@@ -160,6 +217,42 @@ export default function ShareSheet({ route, onClose, printCtx }) {
                 </button>
               ))}
             </div>
+            {/* Why the album did nothing — locked, too few photos, or failed.
+                A tap that produces silence is the worst possible answer. */}
+            {/* Real-time rendering: without a number moving, a 35-second wait
+                is indistinguishable from a frozen app. */}
+            {shortPct !== null && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{
+                  display: "flex", justifyContent: "space-between",
+                  color: C.gold, fontSize: 12, fontWeight: 700, marginBottom: 6,
+                }}>
+                  <span>{t("shortRendering")}</span>
+                  <span>{Math.round(shortPct * 100)}%</span>
+                </div>
+                <div style={{ height: 6, background: C.border, borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{
+                    width: `${Math.round(shortPct * 100)}%`, height: "100%",
+                    background: C.gold, transition: "width .2s linear",
+                  }} />
+                </div>
+                <button
+                  onClick={() => shortAbort.current?.abort()}
+                  style={{
+                    marginTop: 10, background: "none", border: `1px solid ${C.border}`,
+                    borderRadius: 999, padding: "6px 14px", color: C.mutedLight,
+                    fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >{t("cancel")}</button>
+              </div>
+            )}
+            {albumMsg && (
+              <div style={{
+                marginTop: 12, background: `${C.gold}14`, border: `1px solid ${C.gold}44`,
+                borderRadius: 12, padding: "10px 12px", color: C.gold,
+                fontSize: 13, lineHeight: 1.5,
+              }}>{albumMsg}</div>
+            )}
           </>
         )}
       </div>

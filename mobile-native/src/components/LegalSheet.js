@@ -73,7 +73,7 @@ export default function LegalSheet({ onClose }) {
               <Scale size={19} color={C.gold} />
               <Text style={{ fontFamily: FONT.display, color: C.cream, fontSize: 21, letterSpacing: -0.3 }}>{t("legalTitle")}</Text>
             </View>
-            <Pressable onPress={onClose} hitSlop={10}><X size={20} color={C.muted} /></Pressable>
+            <Pressable onPress={onClose} hitSlop={10} accessibilityLabel={t("back")}><X size={20} color={C.muted} /></Pressable>
           </View>
           <Text style={{ color: C.muted, fontSize: 12, marginBottom: showEnNote ? 10 : 18 }}>{L.updated}</Text>
           {showEnNote && (

@@ -628,7 +628,7 @@ export default function Route({ route, prefs, user, onBack, onUpdate, onSaved })
                       boxShadow: isCurrent ? `0 8px 24px ${C.green}33` : C.shadowSoft,
                       opacity: isPast && !stop.done ? 0.55 : 1,
                     }}>
-                      <PoiImage name={stop.name} wiki={stop.wiki} img={stop.img} context={route.destName} emoji={stop.emoji} tags={stop.tags} width={46} height={46} radius={10} fontSize={22} />
+                      <PoiImage name={stop.name} wiki={stop.wiki} img={stop.img} category={stop.category} context={route.destName} emoji={stop.emoji} tags={stop.tags} width={46} height={46} radius={10} fontSize={22} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ color: C.cream, fontWeight: 700, fontSize: 16, textDecoration: stop.done ? "line-through" : "none", opacity: stop.done ? 0.6 : 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {stop.name}

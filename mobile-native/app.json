@@ -6,7 +6,9 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#FBFAF7",
-    "runtimeVersion": { "policy": "appVersion" },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "updates": {
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
@@ -17,7 +19,9 @@
       "backgroundColor": "#FBFAF7",
       "resizeMode": "contain"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.turismdarsimplu.app",
@@ -34,13 +38,22 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FBFAF7"
       },
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA"
+      ]
     },
     "plugins": [
-      ["expo-image-picker", {
-        "photosPermission": "Turism, dar simplu! lets you pick photos to add to your trip gallery.",
-        "cameraPermission": "Turism, dar simplu! uses the camera to photograph attractions for your trip gallery."
-      }]
-    ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Turism, dar simplu! lets you pick photos to add to your trip gallery.",
+          "cameraPermission": "Turism, dar simplu! uses the camera to photograph attractions for your trip gallery."
+        }
+      ]
+    ],
+    "extra": {
+      "revenueCatAndroidKey": "",
+      "revenueCatIosKey": ""
+    }
   }
 }

@@ -1,11 +1,15 @@
-import { useState, useEffect } from "react";
-import { View, Text, Image, Pressable, ScrollView, TextInput, Modal, StyleSheet, Alert } from "react-native";
+import { useState, useEffect, useMemo } from "react";
+import { View, Text, Image, Pressable, ScrollView, TextInput, Modal, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
 import { Btn } from "../components/ui.js";
 import { pickPhoto, listMemories, addMemory, deleteMemory } from "../lib/gallery.js";
-import { Camera, Save, X, Trash2, MapPin, TriangleAlert } from "../icons.js";
+import { MIN_PHOTOS } from "../lib/album.js";
+import { exportAlbumPdf } from "../lib/albumExport.js";
+import { isPremium, usePremium } from "../lib/premium.js";
+import Paywall from "../components/Paywall.js";
+import { Camera, Save, X, Trash2, MapPin, TriangleAlert, Lock } from "../icons.js";
 
 // Soft warning once the gallery grows large — photos live on the device.
 const GALLERY_WARN = 50;
@@ -20,6 +24,13 @@ function Compose({ photo, saved, onSave, onCancel }) {
   const trip = saved.find((r) => r.id === tripId);
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onCancel}>
+      {/* A Modal renders outside the main tree, so the app-level keyboard
+          handling never reaches it — this bottom sheet needs its own, or the
+          caption field and Save button end up under the keyboard. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.grab} />
@@ -46,6 +57,7 @@ function Compose({ photo, saved, onSave, onCancel }) {
           </Btn>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -56,7 +68,7 @@ function Viewer({ memory, onClose, onDelete }) {
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
       <View style={styles.viewer}>
         <View style={styles.viewerBar}>
-          <Pressable onPress={onClose} hitSlop={10}><X size={24} color="#fff" /></Pressable>
+          <Pressable onPress={onClose} hitSlop={10} accessibilityLabel={t("back")}><X size={24} color="#fff" /></Pressable>
           <Pressable onPress={() => onDelete(memory.id)} style={[styles.delBtn, { flexDirection: "row", alignItems: "center", gap: 5 }]}>
             <Trash2 size={13} color={C.red} />
             <Text style={{ color: C.red, fontFamily: FONT.bold, fontSize: 13 }}>{t("galDelete")}</Text>
@@ -75,6 +87,7 @@ function Viewer({ memory, onClose, onDelete }) {
 
 export default function Gallery({ saved }) {
   const { t, lang } = useI18n();
+  usePremium(); // re-render when a purchase or restore lands
   const [memories, setMemories] = useState([]);
   const [pending, setPending] = useState(null);
   const [viewing, setViewing] = useState(null);
@@ -82,6 +95,49 @@ export default function Gallery({ saved }) {
 
   const refresh = () => setMemories(listMemories());
   useEffect(() => { refresh(); }, []);
+
+  // Only trips that actually have enough photos here. Offering a button that
+  // can only fail is worse than offering none.
+  const albumTrips = useMemo(() => {
+    // A plain object rather than a Map: the web copy of this screen imports
+    // lucide's `Map` icon, which shadows the global constructor and crashed the
+    // whole screen. Nothing imports it here yet — keeping the two identical
+    // means adding that icon later cannot reintroduce the bug.
+    const counts = {};
+    for (const m of memories) if (m.tripId) counts[m.tripId] = (counts[m.tripId] || 0) + 1;
+    return (saved || [])
+      .map((route) => ({ route, count: counts[route.id] || 0 }))
+      .filter((x) => x.count >= MIN_PHOTOS)
+      .sort((a, b) => b.count - a.count);
+  }, [memories, saved]);
+
+  const [paywall, setPaywall] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [albumBusy, setAlbumBusy] = useState(false);
+  const [albumMsg, setAlbumMsg] = useState("");
+
+  const makeAlbum = async (route) => {
+    if (!isPremium()) { setPaywall(true); return; }
+    setAlbumBusy(true);
+    setAlbumMsg("");
+    try {
+      await exportAlbumPdf(route, memories, {
+        title: tripTitle(route, t),
+        photos: t("albumPhotos"),
+        day: (n) => t("day", { n }),
+        date: (iso) => {
+          try {
+            return new Date(iso + "T00:00:00").toLocaleDateString(lang === "zh" ? "zh-CN" : lang || "en",
+              { weekday: "short", day: "numeric", month: "short" });
+          } catch { return iso; }
+        },
+      });
+    } catch (e) {
+      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS }) : t("albumFailed"));
+    } finally {
+      setAlbumBusy(false);
+    }
+  };
 
   const add = async () => {
     setBusy(true);
@@ -110,7 +166,65 @@ export default function Gallery({ saved }) {
             <Text style={{ color: C.bg, fontFamily: FONT.extrabold, fontSize: 14 }}>{busy ? "…" : `＋ ${t("galAdd")}`}</Text>
           </Pressable>
         </View>
-        <Text style={{ color: C.muted, fontSize: 13, marginBottom: 20 }}>{t("gallerySub")}</Text>
+        <Text style={{ color: C.muted, fontSize: 13, marginBottom: 14 }}>{t("gallerySub")}</Text>
+
+        {/* Album from the gallery — this is where the photos are, so it is
+            where someone thinks to turn them into something. Per trip, because
+            the day-and-stop structure comes from the itinerary. */}
+        {/* When no trip qualifies yet, say what is missing instead of hiding the
+            feature. A button that silently fails to exist is indistinguishable
+            from one that is broken — and the requirement (link photos to a
+            saved trip) is not something anyone would guess. */}
+        {memories.length > 0 && albumTrips.length === 0 && (
+          <View style={{
+            marginBottom: 18, backgroundColor: C.card, borderWidth: 1,
+            borderStyle: "dashed", borderColor: C.border, borderRadius: 14,
+            padding: 13, flexDirection: "row", gap: 10,
+          }}>
+            <Camera size={16} color={C.muted} style={{ marginTop: 2 }} />
+            <Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, flex: 1 }}>
+              {t("galAlbumNeeds", { n: MIN_PHOTOS })}
+            </Text>
+          </View>
+        )}
+
+        {albumTrips.length > 0 && (
+          <View style={{ marginBottom: 18 }}>
+            <Btn
+              icon={isPremium() ? Camera : Lock}
+              variant="soft"
+              color={C.gold}
+              disabled={albumBusy}
+              onPress={() => (albumTrips.length === 1 ? makeAlbum(albumTrips[0].route) : setPicking((p) => !p))}
+            >{albumBusy ? t("albumWorking") : t("galMakeAlbum")}</Btn>
+
+            {picking && albumTrips.map(({ route, count }) => (
+              <Pressable
+                key={route.id}
+                onPress={() => { setPicking(false); makeAlbum(route); }}
+                style={{
+                  flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                  backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+                  borderRadius: 12, padding: 13, marginTop: 8,
+                }}
+              >
+                <Text style={{ color: C.cream, fontSize: 14, fontFamily: FONT.semibold, flex: 1 }} numberOfLines={1}>
+                  {tripTitle(route, t)}
+                </Text>
+                <Text style={{ color: C.muted, fontSize: 12, marginLeft: 10 }}>{count} {t("albumPhotos")}</Text>
+              </Pressable>
+            ))}
+
+            {!!albumMsg && (
+              <View style={{
+                marginTop: 10, backgroundColor: C.gold + "14",
+                borderWidth: 1, borderColor: C.gold + "44", borderRadius: 12, padding: 12,
+              }}>
+                <Text style={{ color: C.gold, fontSize: 13, lineHeight: 19 }}>{albumMsg}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {memories.length >= GALLERY_WARN && (
           <View style={{ backgroundColor: C.gold + "14", borderWidth: 1, borderColor: C.gold + "44", borderRadius: 14, padding: 12, marginBottom: 16 }}>
@@ -148,6 +262,7 @@ export default function Gallery({ saved }) {
 
       {pending && <Compose photo={pending} saved={saved} onSave={save} onCancel={() => setPending(null)} />}
       {viewing && <Viewer memory={viewing} onClose={() => setViewing(null)} onDelete={remove} />}
+      {paywall && <Paywall onClose={() => setPaywall(false)} />}
     </>
   );
 }

@@ -11,10 +11,13 @@
     "test": "vitest run",
     "legal": "node scripts/build-legal-pages.mjs",
     "server": "node server/index.js",
-    "dev_full": "node server/index.js & vite"
+    "dev_full": "node server/index.js & vite",
+    "db:migrate": "node scripts/migrate-cities-to-supabase.mjs",
+    "db:check": "node scripts/migrate-cities-to-supabase.mjs --dry"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
+    "@supabase/supabase-js": "^2.112.3",
     "express": "^5.2.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.23.0",

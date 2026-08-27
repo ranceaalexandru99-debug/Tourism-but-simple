@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView, ScrollView, Platform } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
@@ -48,7 +48,20 @@ export default function Auth({ onAuth }) {
   const swap = () => { setMode(mode === "login" ? "signup" : "login"); setErr(""); setErrCode(""); };
 
   return (
-    <View style={styles.wrap}>
+    // The form is taller than a small phone once the keyboard is up, so it both
+    // lifts (iOS, which does not resize the window) and scrolls. Android resizes
+    // the window itself — adding `behavior` there fights it and clips the form.
+    // keyboardShouldPersistTaps: without it the first tap on "Sign in" only
+    // dismisses the keyboard and the user has to press twice.
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: C.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+    <ScrollView
+      contentContainerStyle={styles.wrap}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       {/* Destination hero collage */}
       <View style={styles.hero}>
         {HERO_CITIES.map((city, i) => (
@@ -127,12 +140,14 @@ export default function Auth({ onAuth }) {
       <Btn variant="ghost" color={C.muted} onPress={() => onAuth({ name: null, guest: true, method: "guest" })}>
         {t("authGuest")}
       </Btn>
-    </View>
+    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  wrap: { flex: 1, backgroundColor: C.bg, justifyContent: "center", paddingHorizontal: 24 },
+  // Used as a ScrollView contentContainerStyle now, so it grows rather than fills.
+  wrap: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingVertical: 20 },
   hero: { flexDirection: "row", gap: 8, height: 112, marginBottom: 18 },
   heroTile: { position: "relative", borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: C.gold + "25" },
   heroLabel: { position: "absolute", left: 8, bottom: 6, color: "#fff", fontSize: 11, fontFamily: FONT.bold, letterSpacing: 0.2 },

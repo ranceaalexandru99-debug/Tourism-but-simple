@@ -75,6 +75,12 @@ export async function generateRouteAI(prefs) {
     let payload = null;
     try { payload = await res.json(); } catch {}
     if (res.status === 503 && payload?.error === "ai_disabled") _aiDisabled = true;
+    // 404/405 means there is no API here at all — the usual shape of a
+    // static-only deployment (Netlify, GitHub Pages) with the server hosted
+    // elsewhere or not yet hosted. That is structural, not transient, so stop
+    // asking: otherwise every single generation waits for a doomed request and
+    // then tells the user the AI failed, forever.
+    if (res.status === 404 || res.status === 405) _aiDisabled = true;
     throw new Error(`Generare AI eșuată (${res.status}${payload?.error ? ` ${payload.error}` : ""})`);
   }
 
@@ -95,8 +101,18 @@ export async function generateRouteAI(prefs) {
 //   _aiFailed: true      → a key is configured but the call failed (offer retry)
 // (no flags when no key is configured — the mock is the intended path, no nag.)
 export async function generateRouteSmart(prefs) {
-  // Tier 0 — a hand-curated city in mockEngine's DB. Highest quality, use as-is.
-  if (resolveDestination(prefs.destination).key !== "custom") {
+  // Tier 0 — a hand-curated city in mockEngine's DB. Highest quality, and the
+  // first choice — but only deep enough for about two days, so a longer trip
+  // borrows the rest from the OSM tier rather than stretching nine stops over
+  // a week.
+  const curated = resolveDestination(prefs.destination);
+  if (curated.key !== "custom") {
+    try {
+      const merged = await topUpCurated(curated, prefs);
+      if (merged.pois.length > curated.pois.length) {
+        return { ...assembleRoute(merged, prefs), _osm: true };
+      }
+    } catch { /* the curated route on its own is still a good route */ }
     return generateRoute(prefs);
   }
 
@@ -122,10 +138,11 @@ export async function generateRouteSmart(prefs) {
   return generateRoute(prefs);
 }
 
-// Resolve the typed destination to a curated OSM city file and assemble a
-// route from it. Returns null if there's no matching city or no POI file.
-async function tryOsmRoute(prefs) {
-  const head = (prefs.destination || "").split(",")[0].trim();
+// Resolve the typed destination to an OSM-backed `dest`, or null.
+// Split out from tryOsmRoute so a curated city can borrow the same data to top
+// itself up — see topUpCurated below.
+async function loadOsmDest(destination) {
+  const head = (destination || "").split(",")[0].trim();
   if (head.length < 2) return null;
   // Try the whole head, then the first 1-2 words (the destination may carry
   // trailing modifiers like "Timișoara 2 zile").
@@ -162,5 +179,45 @@ async function tryOsmRoute(prefs) {
   // happily produce an empty itinerary with a full budget attached. Fall
   // through to the next tier instead of shipping an empty trip.
   if (dest.pois.length < 3) return null;
+  return dest;
+}
+
+async function tryOsmRoute(prefs) {
+  const dest = await loadOsmDest(prefs.destination);
+  if (!dest) return null;
   return { ...assembleRoute(dest, prefs), _osm: true };
+}
+
+// How many stops a trip of this length actually wants.
+const stopsWanted = (prefs) => {
+  const perDay = prefs.pace === "relaxed" ? 3 : prefs.pace === "packed" ? 5 : 4;
+  const days = prefs.days === "flex" ? 3 : Math.max(1, Math.min(7, prefs.days || 1));
+  return days * perDay;
+};
+
+// Curated cities carry 7–11 hand-written stops: about two full days. Ask one of
+// them for a week and you used to get seven stops spread across seven days —
+// one a day — because Tier 0 answered and the ladder stopped there. The very
+// cities with the best-written entries gave the thinnest long trips.
+//
+// So keep the curated stops, which have real tips and are properly ordered, and
+// top up from OpenStreetMap only when the trip is longer than they can fill.
+async function topUpCurated(dest, prefs) {
+  const wanted = stopsWanted(prefs);
+  if (dest.pois.length >= wanted) return dest;
+
+  const osm = await loadOsmDest(prefs.destination);
+  if (!osm?.pois?.length) return dest;
+
+  const seen = new Set(dest.pois.map((p) => (p.name || "").trim().toLowerCase()));
+  const extra = osm.pois.filter((p) => !seen.has((p.name || "").trim().toLowerCase()));
+  if (!extra.length) return dest;
+
+  return {
+    ...dest,
+    pois: [...dest.pois, ...extra.slice(0, wanted - dest.pois.length)],
+    // The curated food list is short and hand-picked; OSM's is longer. Use
+    // whichever actually has entries, preferring the curated one.
+    food: dest.food?.length ? dest.food : osm.food,
+  };
 }

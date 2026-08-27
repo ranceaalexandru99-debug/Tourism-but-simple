@@ -11,11 +11,18 @@ export default function ThemeSelector({ align = "right" }) {
 
   return (
     <div style={{ position: "relative" }}>
-      <button onClick={() => setOpen((o) => !o)} style={{
-        display: "flex", alignItems: "center", gap: 6, background: C.card,
-        border: `1px solid ${C.border}`, borderRadius: 999, padding: "7px 10px",
-        color: C.cream, fontSize: 15, cursor: "pointer", fontFamily: "inherit",
-      }}>
+      {/* Icon-only, so it needs a name of its own: a screen reader announces an
+          unlabelled button as just "button", with nothing to say what it does. */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label={t("themeTitle")}
+        aria-expanded={open}
+        style={{
+          display: "flex", alignItems: "center", gap: 6, background: C.card,
+          border: `1px solid ${C.border}`, borderRadius: 999, padding: "7px 10px",
+          color: C.cream, fontSize: 15, cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
         {mode === "light" ? <Sun size={15} /> : <Moon size={15} />}
         <span style={{ width: 12, height: 12, borderRadius: "50%", background: C.gold }} />
       </button>

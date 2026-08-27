@@ -8,33 +8,59 @@
 
 import { tStatic } from "./i18n.js";
 
+import { supabase } from "./lib/supabaseClient.js";
+
 const _cache = {};
 
-// A small index (public/pois/index.json) lists every city Qid that has a POI
-// file. We check it before fetching so the ~4900 cities WITHOUT a file don't
-// each cost a failed 404 round-trip — the lookup is a single in-memory Set.
-let _index = null;
-async function loadIndex() {
-  if (_index) return _index;
+// Cities whose POIs were fetched in this session survive a reload here, so a
+// trip you already opened still assembles with no connection.
+const LS_PREFIX = "vai_pois_";
+const LS_INDEX = "vai_pois_index";
+const LS_MAX = 30;
+
+function persistedGet(qid) {
+  try { const raw = localStorage.getItem(LS_PREFIX + qid); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+}
+function persistedPut(qid, payload) {
   try {
-    const res = await fetch("/pois/index.json");
-    _index = new Set(res.ok ? await res.json() : []);
-  } catch {
-    _index = new Set();
-  }
-  return _index;
+    localStorage.setItem(LS_PREFIX + qid, JSON.stringify(payload));
+    let idx;
+    try { idx = JSON.parse(localStorage.getItem(LS_INDEX)) || []; } catch { idx = []; }
+    const at = idx.indexOf(qid);
+    if (at !== -1) idx.splice(at, 1);
+    idx.push(qid);
+    if (idx.length > LS_MAX) {
+      for (const old of idx.splice(0, idx.length - LS_MAX)) {
+        try { localStorage.removeItem(LS_PREFIX + old); } catch {}
+      }
+    }
+    localStorage.setItem(LS_INDEX, JSON.stringify(idx));
+  } catch { /* quota — the fetch still worked */ }
 }
 
 const CATEGORY_EMOJI = {
   museum: "🏛", landmark: "⛪", attraction: "🎭", viewpoint: "🌇",
-  park: "🌳", shopping: "🛍", restaurant: "🍽", cafe: "☕", bar: "🍸",
+  park: "🌳", shopping: "🛍", restaurant: "🍽", cafe: "☕", bar: "🍸", nightclub: "🪩",
+  livemusic: "🎤", casino: "🎰",
 };
 // Sensible default visit durations (minutes) — OSM has no notion of this.
 const CATEGORY_DUR = {
   museum: 90, landmark: 40, attraction: 60, viewpoint: 45, park: 60, shopping: 60,
+  // Evening stops run long — a drink is not a 40-minute monument visit.
+  bar: 75, nightclub: 150, livemusic: 120, casino: 90,
 };
-// Which categories are sightseeing stops vs. food/drink suggestions.
-const STOP_CATEGORIES = new Set(["museum", "landmark", "attraction", "viewpoint", "park", "shopping"]);
+// Which categories can become itinerary stops vs. food/drink suggestions.
+//
+// Bars and clubs are here deliberately. They were being fetched and stored and
+// then silently dropped at the branch below, because they matched neither this
+// set nor the restaurant/cafe case — so "nightlife" was a selectable interest
+// that no stop could ever satisfy. assembleRoute() admits them only when the
+// traveller actually asked for nightlife, so other routes are unchanged.
+const STOP_CATEGORIES = new Set([
+  "museum", "landmark", "attraction", "viewpoint", "park", "shopping",
+  "bar", "nightclub", "livemusic", "casino",
+]);
 
 // Typical entry price (EUR) per category, used ONLY when OSM has no price
 // data. Previously every OSM stop got cost: 0, which the UI renders as
@@ -45,7 +71,45 @@ const STOP_CATEGORIES = new Set(["museum", "landmark", "attraction", "viewpoint"
 const CATEGORY_COST = {
   museum: 12, attraction: 10, viewpoint: 5,
   landmark: 0, park: 0, shopping: 0, // outdoor/public: genuinely free to enter
+  // A bar charges no entry — what you spend is the drink. Clubs usually do
+  // charge at the door. Both are estimates and render with the "~" prefix.
+  bar: 8, nightclub: 15, livemusic: 20, casino: 0,
 };
+
+// Typical opening hours per evening venue, used ONLY when OSM has none.
+// Nightlife is the worst-mapped category for hours — all eight of Timișoara's
+// clubs have none — and "—" is actively unhelpful next to a stop the itinerary
+// schedules for 23:00. These are marked `hoursEstimated` so the UI can show
+// them as typical rather than as fact.
+const CATEGORY_HOURS = {
+  bar: "18:00–02:00",
+  nightclub: "23:00–05:00",
+  livemusic: "20:00–02:00",
+  casino: "non-stop",
+};
+
+// First clock time in an opening_hours string, in minutes past midnight.
+// A deliberately shallow read of a deep syntax: enough to know that "Fr,Sa
+// 21:00-05:00" cannot be visited at eight, which is the one thing the planner
+// needs. Anything it can't parse returns null and is treated as "no idea",
+// never as "closed".
+function opensAt(hours) {
+  const m = String(hours || "").match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const mins = +m[1] * 60 + +m[2];
+  return mins >= 0 && mins < 24 * 60 ? mins : null;
+}
+
+// Resolve display hours: real OSM data if present, else a typical range for the
+// kind of venue, else nothing to say. `opensMin` is carried alongside so the
+// route planner doesn't schedule a place before it unlocks the door.
+function resolveHours(p) {
+  const real = cleanHours(p.hours);
+  if (real) return { hours: real, hoursEstimated: false, opensMin: opensAt(real) };
+  const typical = CATEGORY_HOURS[p.category];
+  if (typical) return { hours: typical, hoursEstimated: true, opensMin: null };
+  return { hours: "—", hoursEstimated: false, opensMin: null };
+}
 
 // Resolve a stop's entry price from OSM tags, falling back to the estimate.
 // `charge` looks like "5 EUR" / "€7.50" / "12"; `fee=no` means free.
@@ -70,20 +134,41 @@ function cleanHours(h) {
   return cleaned.length > 1 ? cleaned : null;
 }
 
-// Fetch + cache a city's POI file. Returns the payload, or null if there's no
-// curated file for this city (so the caller falls through to the AI tier).
+// Load a city's POIs. Returns the payload, or null when the database has no
+// row for this city — the caller then falls through to the live-OSM tier.
+//
+// Order: in-memory → localStorage → Supabase. The two caches mean an already
+// opened city costs nothing on a second visit and still works offline.
 export async function loadCityPois(qid) {
   if (!qid) return null;
   if (qid in _cache) return _cache[qid];
-  const idx = await loadIndex();
-  if (!idx.has(qid)) { _cache[qid] = null; return null; } // no file — skip the fetch
+
+  const stored = persistedGet(qid);
+  if (stored) { _cache[qid] = stored; return stored; }
+
+  if (!supabase) { _cache[qid] = null; return null; }
   try {
-    const res = await fetch(`/pois/${qid}.json`);
-    if (!res.ok) { _cache[qid] = null; return null; }
-    _cache[qid] = await res.json();
-    return _cache[qid];
+    const { data, error } = await supabase
+      .from("city_pois")
+      .select("city_id,source,pois,generated_at")
+      .eq("city_id", qid)
+      .maybeSingle();
+    // maybeSingle() returns null (not an error) when the city simply has no
+    // row, which is the common case for the long tail.
+    if (error || !data?.pois?.length) { _cache[qid] = null; return null; }
+    const payload = {
+      qid: data.city_id,
+      source: data.source,
+      attribution: "© OpenStreetMap contributors",
+      generatedAt: data.generated_at,
+      pois: data.pois,
+    };
+    _cache[qid] = payload;
+    persistedPut(qid, payload);
+    return payload;
   } catch {
-    _cache[qid] = null;
+    // A transient failure must not be remembered as "this city has no data" —
+    // leave the cache empty so the next attempt can succeed.
     return null;
   }
 }
@@ -100,10 +185,13 @@ export function buildDest(cityMeta, payload) {
       stops.push({
         name: p.name,
         wiki: p.wiki,
+        // Carried through so the route planner can tell a bar from a club and
+        // give them different hours — 19:30 is a drink, not a dancefloor.
+        category: p.category,
         emoji: CATEGORY_EMOJI[p.category] || "📍",
         tags: p.tags || ["culture"],
         dur: CATEGORY_DUR[p.category] || 60,
-        hours: cleanHours(p.hours) || "—",
+        ...resolveHours(p),
         ...resolveCost(p),
         // Photo resolved at build time (Commons filename) — PoiImage renders it
         // straight away instead of running the runtime lookup chain.

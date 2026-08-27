@@ -21,7 +21,7 @@ export {
   Hand, Heart, Bath, LifeBuoy, Ambulance, Plug, Globe, Palette,
   PartyPopper, Sparkles, CircleCheck, FileText, Calendar, QrCode, Link2, Mail,
   Lock, KeyRound, LogOut, UserX, WifiOff, Smile, Gift, CloudRain, Bus, Loader, Image,
-  ThumbsUp, Handshake, Vote,
+  ThumbsUp, Handshake, Vote, Film,
 } from "lucide-react";
 
 import {

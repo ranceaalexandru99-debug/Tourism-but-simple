@@ -11,7 +11,7 @@ export {
   Eye, EyeOff, LayoutGrid, NotebookPen, Lightbulb, TriangleAlert, Star, Turtle,
   Scale, Wallet, Coins, Banknote, Backpack, Gem, MessagesSquare, MessageCircle,
   Hand, Heart, Bath, LifeBuoy, Ambulance, Plug, Globe, Palette, PartyPopper,
-  Sparkles, CircleCheck, Lock, KeyRound, LogOut, Smile, Gift, Loader, List,
+  Sparkles, CircleCheck, Lock, KeyRound, LogOut, Smile, Gift, Loader, List, Film,
 } from "lucide-react-native";
 
 import { createElement } from "react";

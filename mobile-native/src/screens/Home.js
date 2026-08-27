@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
@@ -6,6 +7,7 @@ import { FONT } from "../fonts.js";
 import { Label } from "../components/ui.js";
 import { Search, MapPin, Clock, CategoryIcon } from "../icons.js";
 import PoiImage from "../components/PoiImage.js";
+import { countryName } from "../lib/countryNames.js";
 import { LinearGradient } from "expo-linear-gradient";
 
 function greeting(t) {
@@ -19,9 +21,24 @@ function greeting(t) {
 
 const TINTS = [C.gold, C.blue, C.green, C.purple];
 
+// Fisher-Yates, matching the web app: the grid shows a slice of the 116
+// destinations, freshly shuffled per session, rather than the same tiles
+// forever. Rendering all of them would be a wall of 116 images.
+function shuffle(arr) {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 export default function Home({ user, saved, onSearch, onQuick, onOpenSaved }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const name = user?.name || t("traveler");
+  // Stable for the lifetime of this Home instance so tiles don't reshuffle
+  // under the user's finger mid-scroll.
+  const popular = useMemo(() => shuffle(POPULAR).slice(0, 12), []);
 
   return (
     <ScrollView style={styles.wrap} contentContainerStyle={{ padding: 22, paddingBottom: 40 }}>
@@ -37,7 +54,7 @@ export default function Home({ user, saved, onSearch, onQuick, onOpenSaved }) {
 
       <Label color={C.gold}>{t("popular")}</Label>
       <View style={styles.grid}>
-        {POPULAR.map((p, i) => {
+        {popular.map((p, i) => {
           const tint = TINTS[i % TINTS.length];
           return (
             <Pressable
@@ -56,7 +73,7 @@ export default function Home({ user, saved, onSearch, onQuick, onOpenSaved }) {
               <View style={styles.cardChip}><CategoryIcon tags={p.cat} size={15} color="#fff" /></View>
               <View style={styles.cardLabel}>
                 <Text style={styles.cardTitle} numberOfLines={1}>{p.q}</Text>
-                <Text style={styles.cardSub} numberOfLines={1}>{p.sub}</Text>
+                <Text style={styles.cardSub} numberOfLines={1}>{countryName(p.country, lang)}</Text>
               </View>
             </Pressable>
           );

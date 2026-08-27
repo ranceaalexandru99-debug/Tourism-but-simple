@@ -22,7 +22,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const POI_DIR = path.join(ROOT, "public", "pois");
+const POI_DIR = path.join(ROOT, "data", "pois");
 const UA = "TurismDarSimplu/0.1 (rancea.alexandru99@gmail.com)";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

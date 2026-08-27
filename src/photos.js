@@ -1,10 +1,11 @@
+import { getLang } from "./i18n.js";
 // Resolves a representative photo for a point of interest. Free, key-less,
 // CORS-enabled sources, tried in order until one yields a real photo:
 //
-//   1. Wikipedia REST summary (ro → en) over progressively simplified name
-//      candidates — display names are Romanian ("Colosseumul", "Trastevere la
-//      apus") and rarely match article titles exactly.
-//   2. Wikipedia full-text SEARCH (ro → en) for "<name> <city>" — finds the
+//   1. Wikipedia REST summary (reader's language → en) over progressively
+//      simplified name candidates — display names rarely match article
+//      titles exactly.
+//   2. Wikipedia full-text SEARCH (same order) for "<name> <city>" — finds the
 //      right article even when the title differs completely (e.g. "Bunkers
 //      del Carmel" → "Turó de la Rovira"), then reads its thumbnail.
 //   3. Wikimedia Commons file search — finds an actual photo even when no
@@ -16,13 +17,24 @@
 // visit. A small concurrency gate keeps a route screen (≈8 tiles at once)
 // from tripping Wikimedia's rate limiting in the first place.
 
+// Which Wikipedia editions to try, in order: the reader's own language first,
+// then English as the broadest fallback.
+//
+// This was hard-coded to [ro, en], so every photo lookup in the other
+// fifteen languages spent a request on the Romanian Wikipedia before getting
+// anywhere — an English reader asking for Warsaw got a 404 from ro.wikipedia
+// every single time. Using the reader's own edition also returns the article
+// they would actually recognise.
+const wikiLangs = () => [...new Set([getLang(), "en"])];
+
 const mem = {};
-// v3: bumped for the search+commons fallback chain so old cached misses retry.
-const LS = (n) => `vai_photo3_${n}`;
+// v4: the key now carries the language, so v3 entries would be read as if
+// they belonged to whatever language is active. Bumping retires them.
+const LS = (n) => `vai_photo4_${n}`;
 // Bounded LRU: keeps the ~150 most recently used photo cache entries in
 // localStorage so heavy users don't fill the ~5-10MB origin quota after a
 // year of use. The recency index itself is a single localStorage key.
-const LRU_INDEX = "vai_photo3_index";
+const LRU_INDEX = "vai_photo4_index";
 const LRU_MAX = 150;
 
 function bumpLru(key) {
@@ -127,7 +139,11 @@ const release = () => { active--; const next = waiters.shift(); if (next) { acti
 // used to disambiguate the search stages ("Piața Sfatului Brașov").
 export async function fetchPhoto(name, wikiTitle, context) {
   if (!name) return null;
-  const key = (wikiTitle || name) + (context ? `|${context}` : "");
+  // The language is part of the key: the lookup now searches the reader's own
+  // Wikipedia edition, so the same place can legitimately resolve to different
+  // photos in different languages. Without it, switching language would serve
+  // the previous language's cached answer forever.
+  const key = `${getLang()}|${wikiTitle || name}${context ? `|${context}` : ""}`;
   if (key in mem) return mem[key];
   try {
     const ls = localStorage.getItem(LS(key));
@@ -146,7 +162,7 @@ export async function fetchPhoto(name, wikiTitle, context) {
     // 1) direct summaries over candidates
     if (!img)
     outer: for (const candidate of candidatesFor(name, wikiTitle)) {
-      for (const lang of ["ro", "en"]) {
+      for (const lang of wikiLangs()) {
         img = note(await summaryThumb(lang, candidate));
         if (img) break outer;
       }
@@ -154,7 +170,7 @@ export async function fetchPhoto(name, wikiTitle, context) {
     // 2) article search with city context
     if (!img) {
       const q = context ? `${name} ${context}` : name;
-      for (const lang of ["ro", "en"]) {
+      for (const lang of wikiLangs()) {
         img = note(await searchArticleThumb(lang, q));
         if (img) break;
       }

@@ -2,15 +2,19 @@
 // components/ui.jsx (Btn, Chip, Label, Screen). Colours come from the copied
 // theme palette `C`; gradients use expo-linear-gradient.
 
-import { Pressable, Text, View, SafeAreaView, StyleSheet } from "react-native";
+import { Pressable, Text, View, StyleSheet } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { C, themedStyles } from "../lib/theme.js";
 import { FONT } from "../fonts.js";
 
 // Full-screen container with the app background.
+//
+// A plain View on purpose: App.js insets the whole tree once, from the real
+// safe-area values. This used to be React Native's SafeAreaView, which would
+// now inset a second time on iOS — and never did anything on Android anyway.
 export function Screen({ children, style }) {
   return (
-    <SafeAreaView style={[styles.screen, style]}>{children}</SafeAreaView>
+    <View style={[styles.screen, style]}>{children}</View>
   );
 }
 

@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
 import { tripStatus } from "../lib/utils.js";
-import { countryFlag } from "../lib/locale.js";
+import { countryFlagOf } from "../lib/countryNames.js";
 import { FONT } from "../fonts.js";
 import { Label } from "../components/ui.js";
 import { Trash2, Map, MapPin, Clock, Undo2, CategoryIcon } from "../icons.js";
@@ -40,7 +40,7 @@ export default function Trips({ saved, onOpen, onDelete, onRestore }) {
                       <Trash2 size={15} color={C.red} />
                       <Text style={{ color: C.red, fontFamily: FONT.bold, fontSize: 15 }}>{t("tripDeleteConfirm")}</Text>
                     </View>
-                    <Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>{countryFlag(r.country)} {tripTitle(r, t)}</Text>
+                    <Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>{countryFlagOf(r.country)} {tripTitle(r, t)}</Text>
                   </View>
                   <Pressable onPress={() => setConfirmId(null)} style={styles.cancelBtn}>
                     <Text style={{ color: C.mutedLight, fontFamily: FONT.bold, fontSize: 13 }}>{t("cancel")}</Text>
@@ -58,7 +58,7 @@ export default function Trips({ saved, onOpen, onDelete, onRestore }) {
                     <CategoryIcon tags={r.interests} size={24} color={tint} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.title} numberOfLines={1}>{countryFlag(r.country)} {tripTitle(r, t)}</Text>
+                    <Text style={styles.title} numberOfLines={1}>{countryFlagOf(r.country)} {tripTitle(r, t)}</Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
                     <MapPin size={12} color={C.muted} />
                     <Text style={{ color: C.muted, fontSize: 13 }}>{r.totalStops} {t("stops")} ·</Text>

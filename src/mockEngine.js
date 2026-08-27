@@ -383,6 +383,37 @@ export function resolveDestination(query) {
   return { key: "custom", name, ...FALLBACK };
 }
 
+// A stop that exists ONLY for the evening — a bar or a club, which OSM gives
+// the single tag ["nightlife"].
+//
+// Deliberately not `tags.includes("nightlife")`. Every hand-curated nightlife
+// POI pairs the tag with something else — "Montmartre & Sacré-Cœur" is
+// ["culture","nightlife"], "Barceloneta" is ["nature","nightlife","family"] —
+// because there the tag marks a place that is ALSO good after dark, not a bar.
+// The looser test dropped Montmartre from a culture traveller's Paris.
+const isNightlife = (poi) =>
+  !!poi.tags?.length && poi.tags.every((t) => t === "nightlife");
+
+// Evening hours per venue kind. These deliberately leave START_TIMES behind:
+// that ladder ends at 19:30, a reasonable hour for a last museum and an absurd
+// one for a dancefloor. Listed earliest-first — the order here is also the
+// order stops appear in the evening, so a night reads gig → casino → club.
+const NIGHT_TIMES = {
+  bar: ["20:00", "21:30"],
+  livemusic: ["20:30", "22:00"],
+  casino: ["22:00", "23:30"],
+  nightclub: ["23:00", "00:30"],
+};
+const NIGHT_ORDER = Object.keys(NIGHT_TIMES);
+
+// Unknown/curated evening stops have no category; treat them as a bar, the
+// earliest and least committal slot.
+const nightKind = (poi) => (NIGHT_TIMES[poi.category] ? poi.category : "bar");
+
+// At most this many bars/clubs in one day — asking for nightlife should colour
+// the evening, not turn a day into a pub crawl with no city in it.
+const NIGHTLIFE_PER_DAY = 2;
+
 function scorePoi(poi, interests) {
   if (!interests || interests.length === 0) return 1;
   const hits = poi.tags.filter((t) => interests.includes(t)).length;
@@ -439,33 +470,124 @@ export function assembleRoute(dest, prefs) {
   const perDay = prefs.pace === "relaxed" ? 3 : prefs.pace === "packed" ? 5 : 4;
   const tierKey = normTier(prefs.budget);
 
-  const ranked = [...dest.pois]
+  // Nightlife is opt-in, not a bonus. Bars and clubs are real stops now, but a
+  // traveller who asked for culture should never find one in their day — unlike
+  // a museum, it is actively unwanted rather than merely less relevant, so
+  // scoring it low is not enough; it has to leave the pool entirely.
+  const wantsNightlife = interests.includes("nightlife");
+  const eligible = wantsNightlife
+    ? [...dest.pois]
+    : dest.pois.filter((p) => !isNightlife(p));
+
+  const ranked = eligible
     .map((p, i) => ({ p, s: scorePoi(p, interests), i }))
     .sort((a, b) => b.s - a.s || a.i - b.i)
     .map((x) => x.p);
-  const N = ranked.length;
+
+  // Evening stops are planned separately rather than ranked alongside sights.
+  // Ranking alone put them in one contiguous run, so the day planner handed one
+  // day every museum and the next day nothing but bars — at 9:00 in the morning.
+  // Splitting the pool lets each day get some of both, in the right order.
+  const nightPool = wantsNightlife ? ranked.filter(isNightlife) : [];
+  const daytime = ranked.filter((p) => !isNightlife(p));
+  // Reserve the evening seats up front so a day never exceeds the pace the
+  // traveller chose (and never overruns START_TIMES, which has six slots).
+  const nightPerDay = nightPool.length ? NIGHTLIFE_PER_DAY : 0;
+  const dayCap = Math.max(1, perDay - nightPerDay);
+
+  // Day COUNT follows the sightseeing content: a city with three museums and
+  // forty bars is still a three-museum trip.
+  const N = daytime.length;
 
   // "Flexibil" (days === "flex") adapts the length to the destination's content;
   // otherwise clamp the requested number of days to 1..7.
   const days = prefs.days === "flex"
-    ? Math.max(2, Math.min(5, Math.ceil(N / perDay) || 2))
+    ? Math.max(2, Math.min(5, Math.ceil(N / dayCap) || 2))
     : Math.max(1, Math.min(7, prefs.days || 1));
 
-  const buildStop = (poi, k) => ({
+  // Daytime stops walk down START_TIMES by position. Evening stops don't:
+  // they draw from their own ladder, so a bar opens at 20:00 and a club at
+  // 23:00 regardless of how many sights came before them. Position-based times
+  // put a club at 19:30 — the right place in the day, hours too early to go.
+  const timesFor = (dayStops) => {
+    const used = {};
+    return dayStops.map((s, k) => {
+      if (!isNightlife(s)) return START_TIMES[k] || "—";
+      const kind = nightKind(s);
+      used[kind] = used[kind] || 0;
+      return NIGHT_TIMES[kind][used[kind]++] || "—";
+    });
+  };
+
+  const buildStop = (poi, time) => ({
     ...poi,
-    time: START_TIMES[k] || "—",
+    time,
     durLabel: poi.dur >= 60 ? `${Math.round((poi.dur / 60) * 10) / 10}h` : `${poi.dur}m`,
     // AI/fallback info can be stale/hallucinated → flag for reconfirmation.
     unverified: dest.key === "ai" || dest.key === "custom",
     done: false,
   });
 
-  const itinerary = planDays(ranked, days, perDay)
+  // A destination with nothing but nightlife would otherwise plan zero days.
+  const plan = planDays(daytime.length ? daytime : ranked, days, dayCap);
+
+  // Times come from a stop's POSITION in the day (START_TIMES), so appending is
+  // scheduling: evening stops added last land in the late slots rather than
+  // opening the day at 9:00. Dealt round-robin so every day gets a share
+  // instead of the first day taking them all.
+  // Each evening gets one EARLY venue and one LATE one, so the night actually
+  // runs late instead of ending at ten. Dealing strictly in NIGHT_ORDER instead
+  // meant the two seats went to the two earliest kinds available and clubs —
+  // the whole point of asking for nightlife — never appeared at all.
+  //
+  // Within each half, kinds alternate so consecutive evenings differ: a gig one
+  // night, a bar the next, rather than the same kind twice.
+  // Rank a venue for the hour it would be visited: known to be open beats not
+  // knowing, and not knowing beats known to be shut. Sorting on the opening
+  // time alone put every venue OSM has no hours for AHEAD of the ones it does,
+  // so Timișoara's route picked three unknowns and skipped every bar with a
+  // verified schedule. Ties keep relevance order — Array.sort is stable.
+  const fitness = (p, slotMin) => {
+    if (p.opensMin == null) return 1;              // no data — assume typical
+    return p.opensMin <= slotMin ? 0 : 2;          // open by then / not yet
+  };
+  const queueOf = (kinds, slotMin) => {
+    const qs = kinds.map((k) =>
+      nightPool.filter((p) => nightKind(p) === k)
+        .sort((a, b) => fitness(a, slotMin) - fitness(b, slotMin)));
+    const out = [];
+    while (qs.some((q) => q.length)) for (const q of qs) if (q.length) out.push(q.shift());
+    return out;
+  };
+  // Each queue is ranked against the hour its seat is actually served at.
+  const early = queueOf(["bar", "livemusic"], 20 * 60);
+  const late = queueOf(["casino", "nightclub"], 23 * 60);
+
+  // Two passes over the whole trip rather than filling each evening before
+  // moving on: every night gets one venue first, and only then does anyone get
+  // a second. Filling greedily gave a city with two bars both of them on night
+  // one and left night two empty.
+  const nights = plan.map(() => []);
+  const take = (from, other) => (from.length ? from.shift() : other.shift());
+  for (const night of nights) {
+    if (early.length || late.length) night.push(take(early, late));
+  }
+  for (const night of nights) {
+    if (night.length < nightPerDay && (late.length || early.length)) night.push(take(late, early));
+  }
+
+  nights.forEach((night, d) => {
+    // Same order as the hours timesFor() will hand them.
+    night.sort((a, b) => NIGHT_ORDER.indexOf(nightKind(a)) - NIGHT_ORDER.indexOf(nightKind(b)));
+    plan[d].push(...night);
+  });
+
+  const itinerary = plan
     .filter((dayStops) => dayStops.length > 0)
     .map((dayStops, d) => ({
       day: d + 1,
       date: dateForDay(prefs.startDate, d),
-      stops: dayStops.map(buildStop),
+      stops: ((times) => dayStops.map((poi, k) => buildStop(poi, times[k])))(timesFor(dayStops)),
       // Guard the modulo: an empty food list (AI schema allows it) gives
       // `d % 0` → NaN → undefined, which renders as an empty gold panel.
       lunch: dest.food?.length ? dest.food[d % dest.food.length] : "",

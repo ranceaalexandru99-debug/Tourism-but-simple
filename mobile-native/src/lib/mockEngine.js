@@ -365,10 +365,18 @@ function dateForDay(startISO, dayIndex) {
 const strip = (s) => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 function resolveDestination(query) {
-  const q = strip(query);
+  // Match on whole words in the destination phrase (the part before the first
+  // comma — after it come chip modifiers like ", un weekend"). A plain
+  // substring test matched far too much: "România" contains "roma", "Ontario"
+  // contains "rio", "Balikpapan" contains "bali" — each hijacked the whole
+  // tier ladder and returned a curated itinerary for the wrong city.
+  // Ported from the web app, where this was found and fixed first.
+  const q = strip((query || "").split(",")[0]);
+  const whole = (needle) =>
+    !!needle && new RegExp(`(^|\\s)${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`).test(q);
   for (const key of Object.keys(DESTINATIONS)) {
     const d = DESTINATIONS[key];
-    if (q.includes(strip(key)) || q.includes(strip(d.name))) return { key, ...d };
+    if (whole(strip(key)) || whole(strip(d.name))) return { key, ...d };
   }
   const name =
     (query || "Destinația ta").trim().split(/[ ,]/)[0].replace(/^\w/, (c) => c.toUpperCase()) ||
@@ -460,7 +468,9 @@ export function assembleRoute(dest, prefs) {
       day: d + 1,
       date: dateForDay(prefs.startDate, d),
       stops: dayStops.map(buildStop),
-      lunch: dest.food[d % dest.food.length],
+      // `d % 0` is NaN and food is absent entirely on generated destinations,
+      // so the unguarded index threw or produced "undefined" in the itinerary.
+      lunch: dest.food?.length ? dest.food[d % dest.food.length] : "",
       transport: dest.transport,
     }));
 
@@ -523,15 +533,134 @@ export function needsClarification(prefs) {
 
 // `cat` drives the tile's SVG icon (CategoryIcon) now that the UI is emoji-free;
 // the emoji stays for text exports/share strings.
+// Destination tiles for the Home grid. Kept identical to the web app's list
+// (src/mockEngine.js) so both platforms offer the same places. Entries carry an
+// ISO country code rather than a pre-translated country name: the old native
+// list hard-coded Romanian ("Franța") and showed it to English users too.
 export const POPULAR = [
-  { q: "Paris", emoji: "🗼", sub: "Franța", cat: "culture" },
-  { q: "Tokyo", emoji: "⛩", sub: "Japonia", cat: "culture" },
-  { q: "New York", emoji: "🗽", sub: "SUA", cat: "shopping" },
-  { q: "Rio de Janeiro", emoji: "🏖", sub: "Brazilia", cat: "nature" },
-  { q: "Marrakech", emoji: "🕌", sub: "Maroc", cat: "culture" },
-  { q: "Bangkok", emoji: "🛕", sub: "Thailanda", cat: "food" },
-  { q: "Dubai", emoji: "🏙", sub: "Emiratele Arabe", cat: "shopping" },
-  { q: "Sydney", emoji: "🌊", sub: "Australia", cat: "nature" },
-  { q: "Roma", emoji: "🍕", sub: "Italia", cat: "food" },
-  { q: "Cairo", emoji: "🐪", sub: "Egipt", cat: "family" },
+  // Europe
+  { q: "Paris",             emoji: "🗼", country: "FR", cat: "culture" },
+  { q: "London",            emoji: "🎡", country: "GB", cat: "culture" },
+  { q: "Roma",              emoji: "🍕", country: "IT", cat: "food" },
+  { q: "Barcelona",         emoji: "🏛", country: "ES", cat: "culture" },
+  { q: "Amsterdam",         emoji: "🚲", country: "NL", cat: "culture" },
+  { q: "Berlin",            emoji: "🎨", country: "DE", cat: "nightlife" },
+  { q: "Prague",            emoji: "🏰", country: "CZ", cat: "culture" },
+  { q: "Vienna",            emoji: "🎼", country: "AT", cat: "culture" },
+  { q: "Budapest",          emoji: "♨️", country: "HU", cat: "nightlife" },
+  { q: "Athens",            emoji: "🏛", country: "GR", cat: "culture" },
+  { q: "Lisbon",            emoji: "🚋", country: "PT", cat: "food" },
+  { q: "Madrid",            emoji: "💃", country: "ES", cat: "food" },
+  { q: "Istanbul",          emoji: "🕌", country: "TR", cat: "culture" },
+  { q: "Dublin",            emoji: "🍺", country: "IE", cat: "nightlife" },
+  { q: "Copenhagen",        emoji: "🚴", country: "DK", cat: "culture" },
+  { q: "Stockholm",         emoji: "🌊", country: "SE", cat: "culture" },
+  { q: "Oslo",              emoji: "⛰", country: "NO", cat: "nature" },
+  { q: "Helsinki",          emoji: "🧖", country: "FI", cat: "culture" },
+  { q: "Reykjavik",         emoji: "🌋", country: "IS", cat: "nature" },
+  { q: "Edinburgh",         emoji: "🏴󠁧󠁢󠁳󠁣󠁴󠁿", country: "GB", cat: "culture" },
+  { q: "Venice",            emoji: "🛶", country: "IT", cat: "culture" },
+  { q: "Florence",          emoji: "🖼", country: "IT", cat: "culture" },
+  { q: "Milan",             emoji: "👗", country: "IT", cat: "shopping" },
+  { q: "Munich",            emoji: "🍺", country: "DE", cat: "food" },
+  { q: "Zurich",            emoji: "🏔", country: "CH", cat: "nature" },
+  { q: "Santorini",         emoji: "🌅", country: "GR", cat: "nature" },
+  { q: "Mykonos",           emoji: "🏖", country: "GR", cat: "nightlife" },
+  { q: "Dubrovnik",         emoji: "⛵", country: "HR", cat: "culture" },
+  { q: "Split",             emoji: "🏝", country: "HR", cat: "nature" },
+  { q: "Kraków",            emoji: "🏰", country: "PL", cat: "culture" },
+  { q: "Warsaw",            emoji: "🎭", country: "PL", cat: "culture" },
+  { q: "Bucharest",         emoji: "🎪", country: "RO", cat: "nightlife" },
+  { q: "Brașov",            emoji: "🏔", country: "RO", cat: "nature" },
+  { q: "Sibiu",             emoji: "🏛", country: "RO", cat: "culture" },
+  { q: "Cluj-Napoca",       emoji: "🎓", country: "RO", cat: "nightlife" },
+  { q: "Porto",             emoji: "🍷", country: "PT", cat: "food" },
+  { q: "Sevilla",           emoji: "💃", country: "ES", cat: "culture" },
+  { q: "Granada",           emoji: "🏛", country: "ES", cat: "culture" },
+  { q: "Nice",              emoji: "🏖", country: "FR", cat: "nature" },
+  { q: "Marseille",         emoji: "⛵", country: "FR", cat: "food" },
+  { q: "Bruges",            emoji: "🌉", country: "BE", cat: "culture" },
+  { q: "Brussels",          emoji: "🍫", country: "BE", cat: "food" },
+
+  // Asia
+  { q: "Tokyo",             emoji: "⛩", country: "JP", cat: "culture" },
+  { q: "Kyoto",             emoji: "🌸", country: "JP", cat: "culture" },
+  { q: "Osaka",             emoji: "🍜", country: "JP", cat: "food" },
+  { q: "Bangkok",           emoji: "🛕", country: "TH", cat: "food" },
+  { q: "Chiang Mai",        emoji: "🐘", country: "TH", cat: "nature" },
+  { q: "Phuket",            emoji: "🏝", country: "TH", cat: "nature" },
+  { q: "Singapore",         emoji: "🌆", country: "SG", cat: "food" },
+  { q: "Hong Kong",         emoji: "🌃", country: "HK", cat: "shopping" },
+  { q: "Seoul",             emoji: "🎤", country: "KR", cat: "nightlife" },
+  { q: "Busan",             emoji: "🌊", country: "KR", cat: "food" },
+  { q: "Shanghai",          emoji: "🏙", country: "CN", cat: "shopping" },
+  { q: "Beijing",           emoji: "🏯", country: "CN", cat: "culture" },
+  { q: "Xi'an",             emoji: "🐎", country: "CN", cat: "culture" },
+  { q: "Bali",              emoji: "🌴", country: "ID", cat: "nature" },
+  { q: "Jakarta",           emoji: "🕌", country: "ID", cat: "food" },
+  { q: "Kuala Lumpur",      emoji: "🏙", country: "MY", cat: "food" },
+  { q: "Ho Chi Minh City",  emoji: "🍜", country: "VN", cat: "food" },
+  { q: "Hanoi",             emoji: "🛺", country: "VN", cat: "culture" },
+  { q: "Mumbai",            emoji: "🎬", country: "IN", cat: "culture" },
+  { q: "Delhi",             emoji: "🕌", country: "IN", cat: "culture" },
+  { q: "Jaipur",            emoji: "🐘", country: "IN", cat: "culture" },
+  { q: "Goa",               emoji: "🏖", country: "IN", cat: "nature" },
+  { q: "Taipei",            emoji: "🌃", country: "TW", cat: "food" },
+  { q: "Manila",            emoji: "🌊", country: "PH", cat: "nature" },
+  { q: "Colombo",           emoji: "🌴", country: "LK", cat: "nature" },
+  { q: "Malé",              emoji: "🏝", country: "MV", cat: "nature" },
+  { q: "Amman",             emoji: "🏛", country: "JO", cat: "culture" },
+  { q: "Tel Aviv",          emoji: "🏖", country: "IL", cat: "nightlife" },
+  { q: "Jerusalem",         emoji: "🕍", country: "IL", cat: "culture" },
+  { q: "Dubai",             emoji: "🏙", country: "AE", cat: "shopping" },
+  { q: "Abu Dhabi",         emoji: "🕌", country: "AE", cat: "family" },
+  { q: "Doha",              emoji: "🏙", country: "QA", cat: "family" },
+  { q: "Muscat",            emoji: "⛵", country: "OM", cat: "nature" },
+
+  // Americas
+  { q: "New York",          emoji: "🗽", country: "US", cat: "shopping" },
+  { q: "Los Angeles",       emoji: "🌴", country: "US", cat: "nightlife" },
+  { q: "San Francisco",     emoji: "🌉", country: "US", cat: "nature" },
+  { q: "Miami",             emoji: "🏖", country: "US", cat: "nightlife" },
+  { q: "Las Vegas",         emoji: "🎰", country: "US", cat: "nightlife" },
+  { q: "Chicago",           emoji: "🍕", country: "US", cat: "food" },
+  { q: "New Orleans",       emoji: "🎷", country: "US", cat: "food" },
+  { q: "Washington",        emoji: "🏛", country: "US", cat: "culture" },
+  { q: "Boston",            emoji: "📚", country: "US", cat: "culture" },
+  { q: "Seattle",           emoji: "☕", country: "US", cat: "food" },
+  { q: "Honolulu",          emoji: "🌺", country: "US", cat: "nature" },
+  { q: "Toronto",           emoji: "🍁", country: "CA", cat: "culture" },
+  { q: "Montreal",          emoji: "🎨", country: "CA", cat: "culture" },
+  { q: "Vancouver",          emoji: "🌲", country: "CA", cat: "nature" },
+  { q: "Mexico City",       emoji: "🌮", country: "MX", cat: "culture" },
+  { q: "Cancún",            emoji: "🏝", country: "MX", cat: "nature" },
+  { q: "Havana",            emoji: "🚗", country: "CU", cat: "culture" },
+  { q: "Rio de Janeiro",    emoji: "🏖", country: "BR", cat: "nature" },
+  { q: "São Paulo",         emoji: "🌆", country: "BR", cat: "food" },
+  { q: "Buenos Aires",      emoji: "🍷", country: "AR", cat: "food" },
+  { q: "Santiago",          emoji: "🏔", country: "CL", cat: "food" },
+  { q: "Lima",              emoji: "🍽", country: "PE", cat: "food" },
+  { q: "Cusco",             emoji: "🏔", country: "PE", cat: "culture" },
+  { q: "Cartagena",         emoji: "🏰", country: "CO", cat: "culture" },
+  { q: "Bogotá",            emoji: "☕", country: "CO", cat: "food" },
+
+  // Africa
+  { q: "Marrakech",         emoji: "🕌", country: "MA", cat: "culture" },
+  { q: "Fes",               emoji: "🕌", country: "MA", cat: "culture" },
+  { q: "Casablanca",        emoji: "🌊", country: "MA", cat: "culture" },
+  { q: "Cairo",             emoji: "🐪", country: "EG", cat: "family" },
+  { q: "Luxor",             emoji: "🏛", country: "EG", cat: "culture" },
+  { q: "Cape Town",         emoji: "⛰", country: "ZA", cat: "nature" },
+  { q: "Johannesburg",      emoji: "🦁", country: "ZA", cat: "culture" },
+  { q: "Zanzibar",          emoji: "🏖", country: "TZ", cat: "nature" },
+  { q: "Nairobi",           emoji: "🦒", country: "KE", cat: "nature" },
+  { q: "Tunis",             emoji: "🕌", country: "TN", cat: "culture" },
+  { q: "Addis Ababa",       emoji: "☕", country: "ET", cat: "culture" },
+
+  // Oceania
+  { q: "Sydney",            emoji: "🌊", country: "AU", cat: "nature" },
+  { q: "Melbourne",         emoji: "☕", country: "AU", cat: "food" },
+  { q: "Brisbane",          emoji: "🌴", country: "AU", cat: "nature" },
+  { q: "Auckland",          emoji: "⛵", country: "NZ", cat: "nature" },
+  { q: "Queenstown",        emoji: "🏔", country: "NZ", cat: "nature" },
 ];

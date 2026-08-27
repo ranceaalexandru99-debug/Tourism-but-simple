@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, lazy, Suspense } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { C, F, useTheme } from "./theme.js";
 import { Phone } from "./components/ui.jsx";
 import { generateRoute } from "./mockEngine.js";
@@ -7,6 +7,9 @@ import { useI18n } from "./i18n.js";
 import { useOnline } from "./useOnline.js";
 import { decodeSharedRouteFromHash } from "./shareCodec.js";
 import Hint, { hasSeenHint } from "./components/Hint.jsx";
+import { persist } from "./storage.js";
+import lazyWithRetry, { clearChunkReloadGuard } from "./lazyWithRetry.js";
+import { clearCrashStreak } from "./components/ErrorBoundary.jsx";
 
 const SAVED_KEY = "vai_saved_routes";
 const RECENT_KEY = "vai_recent_searches";
@@ -38,12 +41,15 @@ import Preferences from "./screens/Preferences.jsx";
 import Loading from "./screens/Loading.jsx";
 // Route and Gallery pull the heavy map library (leaflet); load them on demand
 // so the initial bundle stays small and the app starts faster on mobile.
-const Route = lazy(() => import("./screens/Route.jsx"));
-const Gallery = lazy(() => import("./screens/Gallery.jsx"));
+const Route = lazyWithRetry(() => import("./screens/Route.jsx"));
+const Gallery = lazyWithRetry(() => import("./screens/Gallery.jsx"));
+// Lazy for the same reason as Route: it pulls in Leaflet, which no one needs
+// until they actually open a map.
+const Explore = lazyWithRetry(() => import("./screens/Explore.jsx"));
 import BottomNav from "./components/BottomNav.jsx";
 import ConsentBanner from "./components/ConsentBanner.jsx";
 import { currentUser, clearSession, deleteAccount } from "./auth.js";
-import { WifiOff } from "./icons.jsx";
+import { WifiOff, TriangleAlert } from "./icons.jsx";
 
 export default function App() {
   useTheme(); // subscribe so the tree re-renders when theme/accent changes
@@ -74,12 +80,29 @@ export default function App() {
     setConsent(true);
   };
 
-  // Persist saved routes / recent searches / last opened across reloads.
+  // Rendering at all means the app started cleanly, so whatever went wrong
+  // before was not a loop. Both guards are cleared only here: the recovery
+  // screen leaves the crash counter alone so a repeat failure can escalate
+  // instead of offering the same useless "Reload" forever, and the chunk guard
+  // resets so a later deploy in this same long-lived tab still gets its one
+  // reload.
   useEffect(() => {
-    try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch {}
+    clearCrashStreak();
+    clearChunkReloadGuard();
+  }, []);
+
+  // Persist saved routes / recent searches / last opened across reloads.
+  //
+  // Trips go through persist(), which sacrifices disposable caches rather than
+  // the trip when the quota is full. The old `try { setItem } catch {}` failed
+  // silently: the app said "Saved!", the user closed it, and the trip was gone —
+  // evicted in effect by a photo cache that costs one request to rebuild.
+  const [saveFailed, setSaveFailed] = useState(false);
+  useEffect(() => {
+    setSaveFailed(!persist(SAVED_KEY, JSON.stringify(saved)));
   }, [saved]);
   useEffect(() => {
-    try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch {}
+    persist(RECENT_KEY, JSON.stringify(recent));
   }, [recent]);
   useEffect(() => {
     try {
@@ -182,6 +205,16 @@ export default function App() {
           textAlign: "center", padding: "5px 8px",
         }}><WifiOff size={12} style={{ verticalAlign: -1.5, marginRight: 5 }} />{t("offlineBanner")}</div>
       )}
+      {/* Storage full, and even discarding every cache did not free enough.
+          Saying so is the whole point: the previous silence let someone believe
+          a trip was saved when it was not. */}
+      {saveFailed && (
+        <div style={{
+          position: "absolute", top: online ? 0 : 24, left: 0, right: 0, zIndex: 60,
+          background: C.red, color: "#fff", fontSize: 12, fontWeight: 700,
+          textAlign: "center", padding: "5px 8px",
+        }}><TriangleAlert size={12} style={{ verticalAlign: -1.5, marginRight: 5 }} />{t("storageFull")}</div>
+      )}
       <Suspense fallback={
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: 34, height: 34, borderRadius: "50%", border: `3px solid ${C.border}`, borderTopColor: C.gold, animation: "vai-spin .8s linear infinite" }} />
@@ -199,7 +232,11 @@ export default function App() {
           onSearch={() => startSearch("")}
           onQuick={(q) => startSearch(q)}
           onOpenSaved={openSaved}
+          onExplore={() => go("explore")}
         />
+      )}
+      {screen === "explore" && (
+        <Explore onQuick={(q) => startSearch(q)} onClose={() => go("home")} />
       )}
       {screen === "trips" && <Trips saved={saved} onOpen={openSaved} onDelete={deleteRoute} onRestore={saveRoute} />}
       {screen === "gallery" && <Gallery saved={saved} />}

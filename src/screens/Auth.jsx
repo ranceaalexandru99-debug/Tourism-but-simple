@@ -40,8 +40,12 @@ export default function Auth({ onAuth }) {
         : await signIn({ email, password: pass });
       onAuth(user);
     } catch (e) {
-      // Map the thrown error codes to localized messages.
-      setErr(t("authErr_" + e.message) || t("authErrGeneric"));
+      // Map the thrown error code to a localized message. t() echoes the key
+      // back when it has no translation, so `||` never fired and an unmapped
+      // code rendered as the literal string "authErr_<code>" — compare instead.
+      const key = "authErr_" + e.message;
+      const msg = t(key);
+      setErr(msg === key ? t("authErrGeneric") : msg);
       setErrCode(e.message);
     } finally {
       setBusy(false);

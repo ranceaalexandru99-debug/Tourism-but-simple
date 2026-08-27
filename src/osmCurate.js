@@ -15,29 +15,77 @@ export function categorize(t) {
   if (t.leisure === "park" || t.leisure === "garden") return "park";
   if (t.amenity === "restaurant") return "restaurant";
   if (t.amenity === "cafe") return "cafe";
+  if (t.amenity === "nightclub") return "nightclub";
+  if (t.amenity === "music_venue") return "livemusic";
+  // `amenity=casino` is deliberately NOT queried above, so this only ever fires
+  // for data already on disk. The tag proved unreliable: all fifteen Overpass
+  // returned for Timișoara were slot-machine halls and betting shops (MaxBet,
+  // Super Bet), and Belfast's was an amusement arcade. The mapping stays so
+  // existing rows still render; the collection stopped.
+  if (t.amenity === "casino") return "casino";
+  // leisure=dance covers both dance VENUES and dance SCHOOLS; the schools carry
+  // dance:teaching=yes, and a Tuesday salsa class is not a night out.
+  if (t.leisure === "dance" && t["dance:teaching"] !== "yes") return "nightclub";
   if (t.amenity === "bar" || t.amenity === "pub" || t.amenity === "biergarten") return "bar";
   if (t.shop === "mall" || t.shop === "department_store" || t.amenity === "marketplace") return "shopping";
   return null;
 }
 
-// Categories that become itinerary stops (vs. food/drink suggestions).
+// SIGHTSEEING categories, used by batch-pois.mjs as the quality gate: a city
+// needs enough of these to be worth an itinerary at all.
+//
+// Deliberately narrower than poiDb's set of the same name, which also admits
+// bars and clubs as stops. Nightlife must not help a city pass this gate —
+// somewhere with two monuments and thirty bars is not a destination.
 export const STOP_CATEGORIES = new Set(["museum", "landmark", "attraction", "viewpoint", "park", "shopping"]);
 
 // our category → the coarse `tags` the app filters on
 export const CATEGORY_TAGS = {
   museum: ["culture"], landmark: ["culture"], attraction: ["culture", "family"],
   viewpoint: ["nature"], park: ["nature", "family"],
-  restaurant: ["food"], cafe: ["food"], bar: ["nightlife"],
+  restaurant: ["food"], cafe: ["food"], bar: ["nightlife"], nightclub: ["nightlife"],
+  livemusic: ["nightlife"], casino: ["nightlife"],
   shopping: ["shopping"],
 };
 
-// balanced final set — how many of each category survive
+// Baseline for a small city — how many of each category survive.
 export const CATEGORY_CAP = {
   museum: 8, landmark: 12, attraction: 8, viewpoint: 4, park: 6,
-  restaurant: 12, cafe: 8, bar: 6, shopping: 4,
+  restaurant: 12, cafe: 8, bar: 6, nightclub: 4, livemusic: 3, casino: 2, shopping: 4,
 };
 
-// The Overpass QL query for one city center.
+// Food is deliberately NOT scaled. Restaurants and cafés never become stops —
+// buildDest turns them into `food`, of which only six are ever shown — so a
+// bigger pool in Paris buys nothing but bytes.
+const UNSCALED = new Set(["restaurant", "cafe"]);
+
+// How much more a bigger city gets. Measured motivation: at the flat baseline,
+// 78–96% of cities were hitting the cap in every major category, so the limit —
+// not OpenStreetMap — was what routes were short of. Paris genuinely has more
+// than eight museums worth seeing; a market town genuinely does not, and giving
+// it a bigger allowance would only pad its file with whatever ranked ninth.
+export const TIER_SCALE = { mega: 2.5, major: 1.8, notable: 1.3, hidden: 1 };
+
+export function capsFor(tier) {
+  const scale = TIER_SCALE[tier] || 1;
+  const out = {};
+  for (const k in CATEGORY_CAP) {
+    out[k] = UNSCALED.has(k) ? CATEGORY_CAP[k] : Math.round(CATEGORY_CAP[k] * scale);
+  }
+  return out;
+}
+
+// How far out a place to eat or drink still counts as central. Used to RANK,
+// not to exclude: a hard cutoff proved brittle, because a city's Wikidata point
+// is not always its tourist centre — Amman's nearest restaurant sits 2,013 m
+// out against a 2,000 m limit, and ten cities lost their entire food list to
+// margins that small. Ranking by distance keeps the central ones when there are
+// central ones, and still leaves something when there are not.
+//
+// Sightseeing is never distance-penalised: Versailles is not central and is
+// still the reason you went.
+export const CENTRE_RADIUS = { mega: 2500, major: 2000, notable: 1500, hidden: 1200 };
+
 export function buildOverpassQuery([lat, lon], radius, timeout = 45) {
   const a = `(around:${radius},${lat},${lon})`;
   return `
@@ -50,14 +98,29 @@ export function buildOverpassQuery([lat, lon], radius, timeout = 45) {
   node[amenity="place_of_worship"][name][wikidata]${a};
   node[leisure~"^(park|garden)$"][name]${a};
   way[leisure~"^(park|garden)$"][name]${a};
-  node[amenity~"^(restaurant|cafe|bar|pub|biergarten|marketplace)$"][name]${a};
+  node[amenity~"^(restaurant|cafe|bar|pub|biergarten|nightclub|music_venue|marketplace)$"][name]${a};
+  node[leisure="dance"][name]${a};
   node[shop~"^(mall|department_store)$"][name]${a};
 );
 out center tags;`.trim();
 }
 
 // Normalize + rank + cap raw Overpass elements into our POI list.
-export function curateElements(elements) {
+// `tier` ("mega" | "major" | "notable" | "hidden") sets how generous the caps
+// are; omitting it falls back to the small-city baseline.
+// Great-circle distance in metres.
+function metres(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * rad, dLon = (b[1] - a[1]) * rad;
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Places you go out to, as opposed to places you travel to see.
+const VENUE = new Set(["bar", "nightclub", "livemusic", "restaurant", "cafe"]);
+
+export function curateElements(elements, tier, centre) {
   const seen = new Set();
   const pois = [];
   for (const el of elements || []) {
@@ -81,7 +144,11 @@ export function curateElements(elements) {
     // sights keep the local name (worth showing to a taxi driver / matching
     // signage) but rank below readable ones.
     const latin = /[A-Za-z]/.test(name);
-    if (!latin && (cat === "restaurant" || cat === "cafe" || cat === "bar" || cat === "shopping")) continue;
+    const UNREADABLE_IS_USELESS = new Set([
+      "restaurant", "cafe", "shopping",
+      "bar", "nightclub", "livemusic", "casino",
+    ]);
+    if (!latin && UNREADABLE_IS_USELESS.has(cat)) continue;
     const notable = (t.wikidata ? 3 : 0) + (t.wikipedia ? 2 : 0) + (t.website ? 1 : 0);
     pois.push({
       name,
@@ -97,14 +164,23 @@ export function curateElements(elements) {
       // Used by poiDb to show a real price instead of a category estimate.
       fee: t.fee === "yes" || t.fee === "no" ? t.fee : undefined,
       charge: t.charge || undefined,
-      _score: notable * 10 + Object.keys(t).length - (latin ? 0 : 15),
+      // Venues are ranked by how central they are, so the per-category cap
+      // keeps the ones a visitor would actually walk to. Beyond the centre
+      // radius the penalty grows with distance, which is enough to sink an
+      // out-of-town bar below every central one without ever excluding it —
+      // a city whose reference point is slightly off still gets a food list.
+      _score: notable * 10 + Object.keys(t).length - (latin ? 0 : 15)
+        - (VENUE.has(cat) && centre
+          ? Math.max(0, metres(centre, [+lat, +lon]) - (CENTRE_RADIUS[tier] || 1500)) / 100
+          : 0),
     });
   }
   pois.sort((a, b) => b._score - a._score);
+  const caps = capsFor(tier);
   const perCat = {};
   const kept = [];
   for (const p of pois) {
-    const cap = CATEGORY_CAP[p.category] || 5;
+    const cap = caps[p.category] || 5;
     perCat[p.category] = (perCat[p.category] || 0);
     if (perCat[p.category] >= cap) continue;
     perCat[p.category]++;

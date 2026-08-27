@@ -45,6 +45,21 @@ function cachePut(qid, payload) {
   } catch { /* quota — the fetch still worked, just uncached */ }
 }
 
+// Offer a freshly fetched city to the shared database. The server validates and
+// rate-limits; it also refuses to overwrite curated rows. Silent by design —
+// this is a background gift, not part of the user's request.
+function contribute(cityId, pois) {
+  try {
+    const base = import.meta.env.VITE_API_BASE || "";
+    fetch(`${base}/api/contribute-pois`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cityId, pois }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch { /* never let this affect the route the user asked for */ }
+}
+
 async function overpassOnce(endpoint, query, timeoutMs) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -83,9 +98,10 @@ export async function fetchCityPoisLive(city) {
   ];
 
   for (const { endpoint, radius, timeoutMs } of attempts) {
-    const elements = await overpassOnce(endpoint, buildOverpassQuery(city.ll, radius, Math.floor(timeoutMs / 1000)), timeoutMs);
+    const elements = await overpassOnce(endpoint, buildOverpassQuery(city.ll, radius, Math.floor(timeoutMs / 1000), city.t), timeoutMs);
     if (!elements) continue;
-    const pois = curateElements(elements);
+    // city.t is the Wikidata-rank tier — a mega city gets a bigger allowance.
+    const pois = curateElements(elements, city.t, city.ll);
     if (pois.length >= 6) {
       const payload = {
         city: city.n,
@@ -96,6 +112,11 @@ export async function fetchCityPoisLive(city) {
         pois,
       };
       cachePut(city.id, payload);
+      // Hand the result back so the next person planning this city gets it
+      // instantly instead of waiting on Overpass again. Fire-and-forget: the
+      // user already has their route, and a failed contribution must never
+      // surface as a failed trip.
+      contribute(city.id, pois);
       return payload;
     }
   }

@@ -15,7 +15,22 @@ import { CategoryIcon } from "../icons.jsx";
 export const commonsUrl = (file, width = 640) =>
   `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(file)}?width=${width}`;
 
-export default function PoiImage({ name, emoji, tags, wiki, context, credit = false, img, fallbackImg, width = "100%", height = 150, radius = 18, fontSize = 64, style }) {
+// Venue categories that provably have no encyclopaedia presence. Measured on
+// 324 bars, pubs, restaurants, cafés and clubs in one city: ZERO carried a
+// wikipedia, wikidata, wikimedia_commons or image tag. So for these the lookup
+// chain below cannot succeed — it can only miss, or match something else.
+//
+// And matching something else is the real danger, not the wasted request:
+// stage 1 queries the bare name with no city, so a Timișoara bar called
+// "Barcelona" resolves to the Spanish city's article and shows its photo. The
+// data holds bars named Barcelona, Copacabana, Byblos, Piramida and Royal.
+// A category icon is right; a confident photo of the wrong place is not.
+const NO_ARTICLE_EXISTS = new Set(["bar", "nightclub", "livemusic", "restaurant", "cafe", "shopping"]);
+
+export default function PoiImage({ name, emoji, tags, wiki, context, category, credit = false, img, fallbackImg, width = "100%", height = 150, radius = 18, fontSize = 64, style }) {
+  // An explicit wiki title is evidence this particular place DOES have an
+  // article, so it overrides the category rule.
+  const hopeless = !img && !wiki && NO_ARTICLE_EXISTS.has(category);
   // Tracks the async lookup: "loading" until the Promise resolves, then the URL
   // string (or null if none was found). We differentiate to know whether to
   // show the shimmer (loading) or the emoji fallback (done, no image).
@@ -23,15 +38,18 @@ export default function PoiImage({ name, emoji, tags, wiki, context, credit = fa
   // scripts/enrich-poi-photos.mjs), we start with it and skip the network
   // lookup entirely — instant, and it can't be rate-limited away.
   const [state, setState] = useState(() =>
-    img ? { status: "done", src: commonsUrl(img) } : { status: "loading", src: null });
+    img ? { status: "done", src: commonsUrl(img) }
+      : hopeless ? { status: "done", src: null }   // straight to the icon, no shimmer
+        : { status: "loading", src: null });
 
   useEffect(() => {
     if (img) { setState({ status: "done", src: commonsUrl(img) }); return; }
+    if (hopeless) { setState({ status: "done", src: null }); return; }
     let on = true;
     setState({ status: "loading", src: null });
     fetchPhoto(name, wiki, context).then((s) => { if (on) setState({ status: "done", src: s }); });
     return () => { on = false; };
-  }, [name, wiki, context, img]);
+  }, [name, wiki, context, img, hopeless]);
 
   const base = {
     width, height, borderRadius: radius, overflow: "hidden", flexShrink: 0,
@@ -64,7 +82,9 @@ export default function PoiImage({ name, emoji, tags, wiki, context, credit = fa
           // so deferring them only delays the first thing the user looks at.
           // Thumbnails stay lazy — a route can hold dozens.
           loading={credit ? "eager" : "lazy"}
-          fetchPriority={credit ? "high" : "auto"}
+          // React 18 does not recognise the camelCase form and warns on every photo;
+          // the lowercase attribute passes straight through to the DOM.
+          fetchpriority={credit ? "high" : "auto"}
           onError={onImgError}
           style={{ width: "100%", height: "100%", objectFit: "cover" }}
         />

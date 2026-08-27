@@ -6,7 +6,7 @@ import { getTrending, getHiddenGems, getEuropeWeekend } from "../destinations.js
 import { useI18n, tripTitle } from "../i18n.js";
 import { countryFlag } from "../locale.js";
 import { tripStatus } from "../utils.js";
-import { Search, History, ArrowRight, Plane, CategoryIcon } from "../icons.jsx";
+import { Search, History, ArrowRight, Plane, Compass, CategoryIcon } from "../icons.jsx";
 import PoiImage from "../components/PoiImage.jsx";
 
 // Horizontal-scroll rail of curated destinations. `items` are compact
@@ -136,7 +136,7 @@ function ProgressRing({ size = 74, stroke = 3, progress = 0, color, track, child
   );
 }
 
-export default function Home({ user, saved, recent, lastOpenedId, onSearch, onQuick, onOpenSaved }) {
+export default function Home({ user, saved, recent, lastOpenedId, onSearch, onQuick, onOpenSaved, onExplore }) {
   const { t, lang } = useI18n();
   const name = user?.name || t("traveler");
   const TINTS = [C.gold, C.blue, C.green, C.purple];
@@ -230,6 +230,19 @@ export default function Home({ user, saved, recent, lastOpenedId, onSearch, onQu
             justifyContent: "center", boxShadow: `0 6px 16px ${C.gold}44`,
           }}><Search size={18} color={C.bg} strokeWidth={2.4} /></span>
           <span style={{ color: C.muted, fontSize: 16 }}>{t("where")}</span>
+        </button>
+
+        {/* The other way in: for travellers who don't have a name in mind yet.
+            Deliberately secondary to search — most people arrive knowing where
+            they want to go. */}
+        <button className="vai-press" onClick={onExplore} style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          background: "transparent", border: `1px solid ${C.border}`, borderRadius: 14,
+          padding: "10px 14px", cursor: "pointer", fontFamily: "inherit",
+          color: C.mutedLight, fontSize: 13, fontWeight: 600,
+          marginTop: -6, marginBottom: recent.length ? 14 : 28,
+        }}>
+          <Compass size={16} color={C.gold} />{t("exploreCta")}
         </button>
 
         {/* Recent searches */}

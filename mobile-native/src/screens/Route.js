@@ -1,18 +1,24 @@
 import { useState } from "react";
-import { View, Text, ScrollView, Pressable, Modal, Linking, Share, TextInput, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal, Linking, Share, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
 import { Btn } from "../components/ui.js";
 import PoiImage from "../components/PoiImage.js";
 import RecapSheet from "../components/RecapSheet.js";
-import { CURRENCIES, convert, phrasesFor, goodToKnow, countryFlag } from "../lib/locale.js";
+import { CURRENCIES, convert, phrasesFor, goodToKnow } from "../lib/locale.js";
+import { countryName, countryFlagOf } from "../lib/countryNames.js";
 import { dayDistanceKm } from "../lib/geo.js";
+import { isPremium, usePremium } from "../lib/premium.js";
+import Paywall from "../components/Paywall.js";
+import { exportAlbumPdf, buildShortPayload, shareShort } from "../lib/albumExport.js";
+import ShortRenderer from "../components/ShortRenderer.js";
+import { listMemories } from "../lib/gallery.js";
 import {
   Star, Clock, Ticket, Lightbulb, NotebookPen, Map, Navigation, Check,
   MapPin, Footprints, Save, PartyPopper, Share2, MessagesSquare, Hand, Heart,
   Coins, Bath, LifeBuoy, Ambulance, Plug, ArrowLeftRight, Utensils, TrainFront,
-  Hourglass, CategoryIcon,
+  Hourglass, CategoryIcon, Camera, Lock, Film,
 } from "../icons.js";
 
 const CUR_CODES = Object.keys(CURRENCIES);
@@ -38,7 +44,7 @@ function RatingStars({ value = 0, onChange }) {
       <Text style={{ color: C.muted, fontFamily: FONT.extrabold, fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase" }}>{t("rateStop")}</Text>
       <View style={{ flexDirection: "row", gap: 4, marginLeft: "auto" }}>
         {[1, 2, 3, 4, 5].map((star) => (
-          <Pressable key={star} onPress={() => onChange(star === value ? 0 : star)} hitSlop={4}>
+          <Pressable key={star} onPress={() => onChange(star === value ? 0 : star)} hitSlop={4} accessibilityLabel={`${t("rateStop")} ${star}`} accessibilityState={{ selected: star <= value }}>
             <Star size={21} color={star <= value ? C.gold : C.border} fill={star <= value ? C.gold : "none"} />
           </Pressable>
         ))}
@@ -54,9 +60,18 @@ function StopDetail({ stop, prev, destName, onClose, onToggleDone, onRate, onNot
   const commitNote = () => { if ((note || "") !== (stop.note || "")) onNote(note.trim()); };
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose}>
+      {/* A Modal renders outside the main tree, so app-level keyboard handling
+          never reaches it. The sheet is also capped at 88% height with more
+          content than that on a small phone — everything below the note field
+          was simply unreachable — hence the ScrollView. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.grab} />
+          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <PoiImage name={stop.name} wiki={stop.wiki} context={destName} emoji={stop.emoji} tags={stop.tags} height={170} radius={18} fontSize={64} style={{ marginBottom: 16 }} />
           <Text style={styles.stopTitle}>{stop.name}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4, marginBottom: 16 }}>
@@ -69,13 +84,18 @@ function StopDetail({ stop, prev, destName, onClose, onToggleDone, onRate, onNot
             <View style={styles.pillRow}><Ticket size={13} color={C.gold} /><Text style={styles.pill}>{stop.cost > 0 ? "€" + stop.cost : t("free")}</Text></View>
           </View>
 
-          <View style={styles.tip}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 }}>
-              <Lightbulb size={13} color={C.gold} />
-              <Text style={{ color: C.gold, fontFamily: FONT.extrabold, fontSize: 12 }}>{t("localTip")}</Text>
+          {/* Only when there is actually a tip — stops from the generated tiers
+              often have none, and this used to render an empty gold-labelled
+              card. Ported from the web app. */}
+          {!!stop.tip && (
+            <View style={styles.tip}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                <Lightbulb size={13} color={C.gold} />
+                <Text style={{ color: C.gold, fontFamily: FONT.extrabold, fontSize: 12 }}>{t("localTip")}</Text>
+              </View>
+              <Text style={{ color: C.cream, fontSize: 15, lineHeight: 21 }}>{stop.tip}</Text>
             </View>
-            <Text style={{ color: C.cream, fontSize: 15, lineHeight: 21 }}>{stop.tip}</Text>
-          </View>
+          )}
 
           {/* Personal notes — bookings, reminders, anything */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 6 }}>
@@ -99,8 +119,10 @@ function StopDetail({ stop, prev, destName, onClose, onToggleDone, onRate, onNot
             {stop.done ? t("visited") : t("markVisited")}
           </Btn>
           {stop.done && onRate && <RatingStars value={stop.rating || 0} onChange={onRate} />}
+          </ScrollView>
         </Pressable>
       </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -193,9 +215,68 @@ function GoodToKnowCard({ info }) {
   );
 }
 
+// Localised date for the album's day headings, matching how the app writes
+// dates elsewhere.
+function albumDate(iso, lang) {
+  try {
+    return new Date(iso + "T00:00:00").toLocaleDateString(lang === "zh" ? "zh-CN" : lang || "en",
+      { weekday: "short", day: "numeric", month: "short" });
+  } catch { return iso; }
+}
+
 export default function Route({ route, onBack, onSaved }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  usePremium(); // re-render when a purchase or restore lands
   const [saved, setSaved] = useState(false);
+
+  // Album export. Reading every photo off disk and base64-encoding it is not
+  // something to do until asked, so it all happens inside this handler.
+  const [paywall, setPaywall] = useState(false);
+  const [albumBusy, setAlbumBusy] = useState(false);
+  const [albumMsg, setAlbumMsg] = useState("");
+  const makeAlbum = async () => {
+    if (!isPremium()) { setPaywall(true); return; }
+    setAlbumBusy(true);
+    setAlbumMsg("");
+    try {
+      await exportAlbumPdf(r, listMemories(), {
+        title: tripTitle(r, t),
+        photos: t("albumPhotos"),
+        day: (n) => t("day", { n }),
+        date: (iso) => albumDate(iso, lang),
+      });
+    } catch (e) {
+      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew") : t("albumFailed"));
+    } finally {
+      setAlbumBusy(false);
+    }
+  };
+
+  // Short video. Rendered inside an off-screen WebView, because React Native
+  // has no encoder and the two libraries that used to provide one are dead
+  // (ffmpeg-kit is marked unsupported on npm; video-processing last shipped in
+  // 2022). Android's WebView is Chromium, so the canvas + MediaRecorder path
+  // the web app already uses works there unchanged.
+  const [shortPayload, setShortPayload] = useState(null);
+  const [shortPct, setShortPct] = useState(null);
+  const startShort = async () => {
+    if (!isPremium()) { setPaywall(true); return; }
+    setAlbumMsg("");
+    setShortPct(0);
+    try {
+      const payload = await buildShortPayload(r, listMemories(), {
+        title: r.destName,
+        subtitle: `${listMemories().filter((m) => m.tripId === r.id).length} ${t("albumPhotos")}`,
+        dayPrefix: t("day", { n: "" }).replace(/\s*\{?n?\}?\s*/g, "").trim() || "",
+        outro: "Turism, dar simplu!",
+      });
+      setShortPayload(payload);
+    } catch (e) {
+      setShortPct(null);
+      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew") : t("shortFailed"));
+    }
+  };
+  const cancelShort = () => { setShortPayload(null); setShortPct(null); };
   const [openStop, setOpenStop] = useState(null);
   const [currency, setCurrency] = useState("EUR");
   const [r, setR] = useState(route);
@@ -257,7 +338,7 @@ export default function Route({ route, onBack, onSaved }) {
               <MapPin size={12} color={C.muted} />
               <Text style={{ color: C.muted, fontSize: 13 }}>{r.totalStops} {t("stops")} ·</Text>
               <Clock size={12} color={C.muted} />
-              <Text style={{ color: C.muted, fontSize: 13 }}>~{r.totalHours}h{r.country ? ` · ${countryFlag(r.country)} ${r.country}` : ""}</Text>
+              <Text style={{ color: C.muted, fontSize: 13 }}>~{r.totalHours}h{r.country ? ` · ${countryFlagOf(r.country)} ${countryName(r.country, lang)}` : ""}</Text>
             </View>
           </View>
         </View>
@@ -337,7 +418,62 @@ export default function Route({ route, onBack, onSaved }) {
         )}
         <Btn icon={PartyPopper} variant="soft" color={C.gold} onPress={() => setRecap(true)} style={{ marginTop: 10 }}>{t("recapOpen")}</Btn>
         <Btn icon={Share2} variant="soft" color={C.blue} onPress={shareTrip} style={{ marginTop: 10 }}>{t("shareTitle")}</Btn>
+        <Btn
+          icon={isPremium() ? Camera : Lock}
+          variant="soft"
+          color={C.gold}
+          disabled={albumBusy}
+          onPress={makeAlbum}
+          style={{ marginTop: 10 }}
+        >{albumBusy ? t("albumWorking") : t("shareAlbum")}</Btn>
+        <Btn
+          icon={isPremium() ? Film : Lock}
+          variant="soft"
+          color={C.purple}
+          disabled={shortPct !== null}
+          onPress={startShort}
+          style={{ marginTop: 10 }}
+        >{shortPct !== null ? `${t("shortRendering")} ${Math.round(shortPct * 100)}%` : t("shareShort")}</Btn>
+        {/* Rendering runs in real time, so the number moving is the only thing
+            distinguishing this from a frozen app. */}
+        {shortPct !== null && (
+          <>
+            <View style={{ height: 6, backgroundColor: C.border, borderRadius: 3, overflow: "hidden", marginTop: 10 }}>
+              <View style={{ width: `${Math.round(shortPct * 100)}%`, height: "100%", backgroundColor: C.purple }} />
+            </View>
+            <Btn variant="ghost" color={C.muted} onPress={cancelShort} style={{ marginTop: 10 }}>{t("cancel")}</Btn>
+          </>
+        )}
+        {/* Why nothing happened — locked, too few photos, or a failure. A tap
+            that produces silence is the least helpful possible answer. */}
+        {!!albumMsg && (
+          <View style={{
+            marginTop: 10, backgroundColor: C.gold + "14",
+            borderWidth: 1, borderColor: C.gold + "44", borderRadius: 12, padding: 12,
+          }}>
+            <Text style={{ color: C.gold, fontSize: 13, lineHeight: 19 }}>{albumMsg}</Text>
+          </View>
+        )}
       </ScrollView>
+
+      {paywall && <Paywall onClose={() => setPaywall(false)} />}
+
+      {shortPayload && (
+        <ShortRenderer
+          payload={shortPayload}
+          onProgress={setShortPct}
+          onDone={async (uri) => {
+            setShortPayload(null);
+            setShortPct(null);
+            try { await shareShort(uri); } catch { setAlbumMsg(t(shortFailed)); }
+          }}
+          onError={(reason) => {
+            setShortPayload(null);
+            setShortPct(null);
+            setAlbumMsg(reason === unsupported ? t(shortUnsupported) : t(shortFailed));
+          }}
+        />
+      )}
 
       {openStop && (
         <StopDetail stop={openStop.stop} prev={openStop.prev} destName={r.destName} onClose={() => setOpenStop(null)} onToggleDone={toggleDone} onRate={rateOpenStop} onNote={noteOpenStop} />
