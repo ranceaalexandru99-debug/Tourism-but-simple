@@ -85,6 +85,13 @@ export async function exportAlbumPdf(route, memories, labels) {
     if (dataUrl) inlined.push({ ...m, dataUrl });
   }
 
+  // The trip HAS photos, but none of their files could be read — they were
+  // moved, or the app's storage was cleared while the index survived. Falling
+  // through to "tooFew" would tell someone staring at a full gallery to add
+  // more photos, which is nonsense; this is a different problem and needs to
+  // say so.
+  if (!inlined.length) throw new Error("noFiles");
+
   const album = buildAlbum(route, inlined);
   if (!hasEnoughForAlbum(album)) throw new Error("tooFew");
 
@@ -124,6 +131,7 @@ export async function buildShortPayload(route, memories, labels) {
     const dataUrl = await toDataUrl(m.uri, 720);
     if (dataUrl) inlined.push({ ...m, dataUrl });
   }
+  if (!inlined.length) throw new Error("noFiles");
   const album = buildAlbum(route, inlined);
   if (!hasEnoughForAlbum(album)) throw new Error("tooFew");
 

@@ -27,7 +27,13 @@ async function persistPhotoFile(uri) {
 
 const KEY = "vai_gallery_meta";
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
-const persist = (list) => { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch {} };
+// Reports whether the write actually happened. Swallowing this meant a photo
+// could be taken, appear in the grid, and then be gone on the next launch with
+// nothing ever having said so — the same silent loss the web app was fixed for,
+// which had never reached here.
+const persist = (list) => {
+  try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch { return false; }
+};
 
 // Launch the camera (or library) and return a durable photo path.
 // Returns null when the user cancels, or "denied" when permission is refused —
@@ -48,11 +54,11 @@ export function listMemories() {
   return load().sort((a, b) => b.ts - a.ts);
 }
 
+// Returns false when the photo could not be stored, so the caller can say so.
 export function addMemory(memory) {
   const list = load();
   list.unshift(memory);
-  persist(list);
-  return memory;
+  return persist(list);
 }
 
 export function deleteMemory(id) {

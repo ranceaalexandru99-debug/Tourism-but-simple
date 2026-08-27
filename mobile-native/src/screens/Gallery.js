@@ -121,7 +121,9 @@ export default function Gallery({ saved }) {
     setAlbumBusy(true);
     setAlbumMsg("");
     try {
-      await exportAlbumPdf(route, memories, {
+      // The result matters: with no share sheet the PDF is written but nothing
+      // opens, and ignoring this looked exactly like a button that did nothing.
+      const outcome = await exportAlbumPdf(route, memories, {
         title: tripTitle(route, t),
         photos: t("albumPhotos"),
         day: (n) => t("day", { n }),
@@ -132,8 +134,13 @@ export default function Gallery({ saved }) {
           } catch { return iso; }
         },
       });
+      if (outcome === "saved") setAlbumMsg(t("albumSavedNoShare"));
     } catch (e) {
-      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS }) : t("albumFailed"));
+      setAlbumMsg(
+        e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS })
+          : e?.message === "noFiles" ? t("albumNoFiles")
+            : t("albumFailed"),
+      );
     } finally {
       setAlbumBusy(false);
     }
@@ -150,7 +157,8 @@ export default function Gallery({ saved }) {
   };
 
   const save = ({ caption, tripId, tripTitle: tt }) => {
-    addMemory({ id: `m${Date.now()}${Math.random().toString(36).slice(2, 6)}`, ts: Date.now(), uri: pending, caption, tripId, tripTitle: tt, stopName: null, ll: null });
+    const stored = addMemory({ id: `m${Date.now()}${Math.random().toString(36).slice(2, 6)}`, ts: Date.now(), uri: pending, caption, tripId, tripTitle: tt, stopName: null, ll: null });
+    if (!stored) Alert.alert(t("galAddPhoto"), t("galPhotoSaveFailed"));
     setPending(null);
     refresh();
   };
