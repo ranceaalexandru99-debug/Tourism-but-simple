@@ -63,6 +63,23 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
 
 const app = express();
 app.disable("x-powered-by");
+
+// Who is allowed to tell us the client's IP.
+//
+// The rate limiter used to read X-Forwarded-For straight off the request. That
+// header is written by the CLIENT unless a proxy overwrites it, so anyone could
+// send a different value on every request and never be limited at all — on the
+// endpoint that calls the paid Claude API, and on the one that writes
+// crowd-sourced POIs into everybody's itineraries, where the rate limit is the
+// main thing standing between a stranger and 2,500 cities of fabricated data.
+//
+// Express only derives req.ip from the header when explicitly told to trust a
+// proxy, so that decision is now deployment configuration: set TRUST_PROXY to
+// the number of proxies in front of this server (1 behind a single load
+// balancer), or leave it unset and req.ip is the real socket address, which
+// cannot be forged.
+const TRUST_PROXY = process.env.TRUST_PROXY;
+if (TRUST_PROXY) app.set("trust proxy", /^\d+$/.test(TRUST_PROXY) ? Number(TRUST_PROXY) : TRUST_PROXY);
 // Route payloads are small (a few hundred bytes); cap the body so a hostile
 // client can't make us buffer megabytes.
 app.use(express.json({ limit: "16kb" }));
@@ -72,7 +89,12 @@ app.use((req, res, next) => {
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    // Authorization matters: /api/delete-account is driven entirely by the
+    // bearer token, so without it here the browser's preflight refuses the
+    // header and the store-mandated "delete my account" button fails — but only
+    // once the API is deployed on a different origin than the app, never in dev
+    // where the Vite proxy makes everything same-origin.
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   }
   if (req.method === "OPTIONS") return res.sendStatus(204);
@@ -124,7 +146,7 @@ app.post("/api/contribute-pois", async (req, res) => {
   if (!admin) {
     return res.status(503).json({ error: "not_configured", message: "Supabase admin credentials are not set." });
   }
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip;
+  const ip = req.ip;
   if (rateLimited(ip)) {
     return res.status(429).json({ error: "rate_limited", message: "Too many requests, try again shortly." });
   }
@@ -209,7 +231,7 @@ app.post("/api/delete-account", async (req, res) => {
   const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
   if (!token) return res.status(401).json({ error: "unauthorized", message: "Missing bearer token." });
 
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip;
+  const ip = req.ip;
   if (rateLimited(ip)) {
     return res.status(429).json({ error: "rate_limited", message: "Too many requests, try again shortly." });
   }
@@ -248,7 +270,7 @@ app.post("/api/generate-route", async (req, res) => {
   const invalid = validatePrefs(prefs);
   if (invalid) return res.status(400).json({ error: "bad_request", message: invalid });
 
-  const ip = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.ip;
+  const ip = req.ip;
   if (rateLimited(ip)) {
     return res.status(429).json({ error: "rate_limited", message: "Too many requests, try again shortly." });
   }
