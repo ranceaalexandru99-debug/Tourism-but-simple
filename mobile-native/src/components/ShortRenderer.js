@@ -21,7 +21,35 @@ export default function ShortRenderer({ payload, onProgress, onDone, onError }) 
   const meta = useRef(null);
   const settled = useRef(false);
 
-  useEffect(() => () => { settled.current = true; }, []);
+  // Watchdog for a WebView that goes silent.
+  //
+  // Every way the render can die without saying so ends here: a MediaRecorder
+  // that never fires onstop, the OS reclaiming the WebView, the JS engine
+  // throwing somewhere the page's own try cannot see. WebView's onError only
+  // covers loading the page, so none of those reached us and the user sat on a
+  // progress bar that would never move again.
+  //
+  // A fixed deadline would be wrong — a twelve-photo render legitimately takes
+  // a while. What is never legitimate is SILENCE: the page reports progress
+  // continuously, so the timer resets on every message and only fires when
+  // nothing has arrived at all.
+  const STALL_MS = 45000;
+  const watchdog = useRef(null);
+  const stopWatchdog = () => { if (watchdog.current) { clearTimeout(watchdog.current); watchdog.current = null; } };
+  const kickWatchdog = () => {
+    stopWatchdog();
+    watchdog.current = setTimeout(() => {
+      if (settled.current) return;
+      settled.current = true;
+      onError?.("stalled");
+    }, STALL_MS);
+  };
+
+  useEffect(() => {
+    kickWatchdog();
+    return () => { settled.current = true; stopWatchdog(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const finish = async () => {
     if (settled.current) return;
@@ -48,12 +76,13 @@ export default function ShortRenderer({ payload, onProgress, onDone, onError }) 
     if (settled.current) return;
     let msg;
     try { msg = JSON.parse(event.nativeEvent.data); } catch { return; }
+    kickWatchdog();   // it is alive; start the silence clock over
     switch (msg.type) {
       case "progress": onProgress?.(msg.value); break;
       case "begin": meta.current = msg; parts.current = new Array(msg.parts); break;
       case "chunk": parts.current[msg.i] = msg.data; break;
-      case "done": finish(); break;
-      case "error": settled.current = true; onError?.(msg.reason); break;
+      case "done": stopWatchdog(); finish(); break;
+      case "error": stopWatchdog(); settled.current = true; onError?.(msg.reason); break;
       default: break;
     }
   };
@@ -69,7 +98,7 @@ export default function ShortRenderer({ payload, onProgress, onDone, onError }) 
         domStorageEnabled={false}
         allowFileAccess={false}
         mediaPlaybackRequiresUserAction={false}
-        onError={() => { if (!settled.current) { settled.current = true; onError?.("webview"); } }}
+        onError={() => { if (!settled.current) { settled.current = true; stopWatchdog(); onError?.("webview"); } }}
         style={{ width: 1, height: 1, backgroundColor: "transparent" }}
       />
     </View>

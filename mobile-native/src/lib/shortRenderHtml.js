@@ -80,7 +80,13 @@ function wrap(ctx, text, maxW) {
     const rec = new MediaRecorder(cv.captureStream(FPS), { mimeType: mime, videoBitsPerSecond: 2500000 });
     const chunks = [];
     rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-    const stopped = new Promise(r => rec.onstop = r);
+    // onstop alone is not an exit: a recorder that fails mid-capture never
+    // fires it. onerror rejects into the outer catch, which reports back.
+    // Mirrors the same fix in the web encoder — these two drift otherwise.
+    const stopped = new Promise((r, reject) => {
+      rec.onstop = r;
+      rec.onerror = e => reject(new Error((e && e.error && e.error.name) || "recorder"));
+    });
 
     const total = INTRO + scenes.length * PER + OUTRO;
     const gold = "#C9A84C", ink = "#0A1628";

@@ -465,12 +465,12 @@ export default function Route({ route, onBack, onSaved }) {
           onDone={async (uri) => {
             setShortPayload(null);
             setShortPct(null);
-            try { await shareShort(uri); } catch { setAlbumMsg(t(shortFailed)); }
+            try { await shareShort(uri); } catch { setAlbumMsg(t("shortFailed")); }
           }}
           onError={(reason) => {
             setShortPayload(null);
             setShortPct(null);
-            setAlbumMsg(reason === unsupported ? t(shortUnsupported) : t(shortFailed));
+            setAlbumMsg(reason === "unsupported" ? t("shortUnsupported") : t("shortFailed"));
           }}
         />
       )}
