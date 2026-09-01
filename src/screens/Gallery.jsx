@@ -5,9 +5,10 @@ import { useI18n, tripTitle } from "../i18n.js";
 import { addMemory, listMemories, deleteMemory, resizeImage } from "../gallery.js";
 import { buildAlbum, hasEnoughForAlbum, MIN_PHOTOS } from "../album.js";
 import { printAlbum } from "../exporters.js";
+import { renderShort, canRenderShort, saveOrShareShort } from "../shortVideo.js";
 import { isPremium } from "../premium.js";
 import MemoryMap from "../components/MemoryMap.jsx";
-import { Camera, Save, Trash2, MapPin, TriangleAlert, LayoutGrid, Map, Lock } from "../icons.jsx";
+import { Camera, Save, Trash2, MapPin, TriangleAlert, LayoutGrid, Map, Lock, Film } from "../icons.jsx";
 
 // Soft warning once the gallery grows large — photos live in the browser's
 // storage, which has limits; nudge the user to prune before it fills up.
@@ -188,6 +189,49 @@ export default function Gallery({ saved }) {
     }
   };
 
+  // The short, from the same photos and the same trip choice as the album.
+  //
+  // It lived only on the trip screen's share sheet, which is not where anyone
+  // looks: the gallery is where the photos are, so it is where turning them
+  // into something belongs — the same reasoning that moved the album here.
+  //
+  // Encoding runs in real time (MediaRecorder against a live canvas), so a ~35s
+  // short takes ~35s. Without a percentage that is indistinguishable from a
+  // frozen app.
+  const [shortPct, setShortPct] = useState(null);
+
+  const makeShort = async (route) => {
+    if (!isPremium()) { setAlbumMsg(t("albumLocked")); return; }
+    if (!canRenderShort()) { setAlbumMsg(t("shortUnsupported")); return; }
+    setAlbumMsg("");
+    setShortPct(0);
+    try {
+      const album = buildAlbum(route, memories || []);
+      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew", { n: MIN_PHOTOS })); return; }
+      const blob = await renderShort(album, {
+        title: route.destName,
+        subtitle: `${album.photoCount} ${t("albumPhotos")}`,
+        dayLabel: (n) => t("day", { n }),
+        outro: "Turism, dar simplu!",
+      }, { onProgress: setShortPct });
+      await saveOrShareShort(blob, `${(route.destName || "trip").replace(/\s+/g, "-").toLowerCase()}.mp4`);
+    } catch (e) {
+      if (e?.message !== "aborted") setAlbumMsg(t("shortFailed"));
+    } finally {
+      setShortPct(null);
+    }
+  };
+
+  // Which action the trip picker is collecting a trip for.
+  const [pickFor, setPickFor] = useState("album");
+  const runPick = (route) => (pickFor === "short" ? makeShort(route) : makeAlbum(route));
+  const start = (kind) => {
+    const only = albumTrips.length === 1;
+    if (only) return kind === "short" ? makeShort(albumTrips[0].route) : makeAlbum(albumTrips[0].route);
+    setPickFor(kind);
+    setPicking((p) => !(p && pickFor === kind));
+  };
+
   return (
     <>
       <StatusBar />
@@ -229,20 +273,31 @@ export default function Gallery({ saved }) {
 
         {albumTrips.length > 0 && (
           <div style={{ marginBottom: 18 }}>
-            <button
-              className="vai-press"
-              onClick={() => (albumTrips.length === 1 ? makeAlbum(albumTrips[0].route) : setPicking((p) => !p))}
-              disabled={albumBusy}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            {(() => {
+              const busy = albumBusy || shortPct !== null;
+              const btn = {
+                flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
                 background: "transparent", border: `1px solid ${C.gold}55`, borderRadius: 14,
-                padding: "11px 14px", cursor: "pointer", fontFamily: "inherit",
-                color: C.gold, fontSize: 14, fontWeight: 700, opacity: albumBusy ? 0.6 : 1,
-              }}
-            >
-              {isPremium() ? <Camera size={16} /> : <Lock size={16} />}
-              {albumBusy ? t("albumWorking") : t("galMakeAlbum")}
-            </button>
+                padding: "11px 14px", cursor: busy ? "default" : "pointer", fontFamily: "inherit",
+                color: C.gold, fontSize: 14, fontWeight: 700, opacity: busy ? 0.6 : 1,
+              };
+              return (
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="vai-press" onClick={() => start("album")} disabled={busy} style={btn}>
+                    {isPremium() ? <Camera size={16} /> : <Lock size={16} />}
+                    {albumBusy ? t("albumWorking") : t("galMakeAlbum")}
+                  </button>
+                  <button className="vai-press" onClick={() => start("short")} disabled={busy} style={btn}>
+                    {isPremium() ? <Film size={16} /> : <Lock size={16} />}
+                    {/* The percentage is the whole point: encoding is real-time,
+                        so a silent button looks like a frozen one. */}
+                    {shortPct !== null
+                      ? `${t("shortRendering")} ${Math.round(shortPct * 100)}%`
+                      : t("shareShort")}
+                  </button>
+                </div>
+              );
+            })()}
 
             {picking && (
               <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -250,7 +305,7 @@ export default function Gallery({ saved }) {
                   <button
                     key={route.id}
                     className="vai-press"
-                    onClick={() => { setPicking(false); makeAlbum(route); }}
+                    onClick={() => { setPicking(false); runPick(route); }}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
                       background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,

@@ -6,10 +6,11 @@ import { FONT } from "../fonts.js";
 import { Btn } from "../components/ui.js";
 import { pickPhoto, listMemories, addMemory, deleteMemory } from "../lib/gallery.js";
 import { MIN_PHOTOS } from "../lib/album.js";
-import { exportAlbumPdf } from "../lib/albumExport.js";
+import { exportAlbumPdf, buildShortPayload, shareShort } from "../lib/albumExport.js";
 import { isPremium, usePremium } from "../lib/premium.js";
 import Paywall from "../components/Paywall.js";
-import { Camera, Save, X, Trash2, MapPin, TriangleAlert, Lock } from "../icons.js";
+import ShortRenderer from "../components/ShortRenderer.js";
+import { Camera, Save, X, Trash2, MapPin, TriangleAlert, Lock, Film } from "../icons.js";
 
 // Soft warning once the gallery grows large — photos live on the device.
 const GALLERY_WARN = 50;
@@ -146,6 +147,47 @@ export default function Gallery({ saved }) {
     }
   };
 
+  // The short, from the same photos and the same trip choice as the album.
+  // It existed only on the trip screen; the gallery is where the photos are.
+  const [shortPct, setShortPct] = useState(null);
+  const [shortPayload, setShortPayload] = useState(null);
+
+  const makeShort = async (route) => {
+    if (!isPremium()) { setPaywall(true); return; }
+    setAlbumMsg("");
+    setShortPct(0);
+    try {
+      const mine = (memories || []).filter((m) => m.tripId === route.id);
+      const payload = await buildShortPayload(route, memories, {
+        title: route.destName,
+        subtitle: `${mine.length} ${t("albumPhotos")}`,
+        dayPrefix: t("day", { n: "" }).replace(/\s*\{?n?\}?\s*/g, "").trim() || "",
+        outro: "Turism, dar simplu!",
+      });
+      // Mounting the renderer starts the work; it reports back through the
+      // handlers on the element itself, near the bottom of this file.
+      setShortPayload(payload);
+    } catch (e) {
+      setShortPct(null);
+      setAlbumMsg(
+        e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS })
+          : e?.message === "noFiles" ? t("albumNoFiles")
+            : t("shortFailed"),
+      );
+    }
+  };
+
+  const cancelShort = () => { setShortPayload(null); setShortPct(null); };
+
+  // Which action the trip picker is collecting a trip for.
+  const [pickFor, setPickFor] = useState("album");
+  const runPick = (route) => (pickFor === "short" ? makeShort(route) : makeAlbum(route));
+  const startFor = (kind) => {
+    if (albumTrips.length === 1) return kind === "short" ? makeShort(albumTrips[0].route) : makeAlbum(albumTrips[0].route);
+    setPickFor(kind);
+    setPicking((p) => !(p && pickFor === kind));
+  };
+
   const add = async () => {
     setBusy(true);
     try {
@@ -202,14 +244,34 @@ export default function Gallery({ saved }) {
               icon={isPremium() ? Camera : Lock}
               variant="soft"
               color={C.gold}
-              disabled={albumBusy}
-              onPress={() => (albumTrips.length === 1 ? makeAlbum(albumTrips[0].route) : setPicking((p) => !p))}
+              disabled={albumBusy || shortPct !== null}
+              onPress={() => startFor("album")}
             >{albumBusy ? t("albumWorking") : t("galMakeAlbum")}</Btn>
+
+            <Btn
+              icon={isPremium() ? Film : Lock}
+              variant="soft"
+              color={C.purple}
+              disabled={albumBusy || shortPct !== null}
+              onPress={() => startFor("short")}
+              style={{ marginTop: 10 }}
+            >{shortPct !== null ? `${t("shortRendering")} ${Math.round(shortPct * 100)}%` : t("shareShort")}</Btn>
+
+            {/* Encoding runs in real time, so the number moving is the only
+                thing distinguishing this from a frozen app. */}
+            {shortPct !== null && (
+              <>
+                <View style={{ height: 6, backgroundColor: C.border, borderRadius: 3, overflow: "hidden", marginTop: 10 }}>
+                  <View style={{ width: `${Math.round(shortPct * 100)}%`, height: "100%", backgroundColor: C.purple }} />
+                </View>
+                <Btn variant="ghost" color={C.muted} onPress={cancelShort} style={{ marginTop: 10 }}>{t("cancel")}</Btn>
+              </>
+            )}
 
             {picking && albumTrips.map(({ route, count }) => (
               <Pressable
                 key={route.id}
-                onPress={() => { setPicking(false); makeAlbum(route); }}
+                onPress={() => { setPicking(false); runPick(route); }}
                 style={{
                   flexDirection: "row", alignItems: "center", justifyContent: "space-between",
                   backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
@@ -271,6 +333,28 @@ export default function Gallery({ saved }) {
       {pending && <Compose photo={pending} saved={saved} onSave={save} onCancel={() => setPending(null)} />}
       {viewing && <Viewer memory={viewing} onClose={() => setViewing(null)} onDelete={remove} />}
       {paywall && <Paywall onClose={() => setPaywall(false)} />}
+
+      {/* Mounting this starts the render; unmounting it cancels, because the
+          WebView doing the encoding goes with it. */}
+      {shortPayload && (
+        <ShortRenderer
+          payload={shortPayload}
+          onProgress={setShortPct}
+          onDone={async (uri) => {
+            setShortPayload(null);
+            setShortPct(null);
+            try {
+              const outcome = await shareShort(uri);
+              if (outcome === "saved") setAlbumMsg(t("albumSavedNoShare"));
+            } catch { setAlbumMsg(t("shortFailed")); }
+          }}
+          onError={(reason) => {
+            setShortPayload(null);
+            setShortPct(null);
+            setAlbumMsg(reason === "unsupported" ? t("shortUnsupported") : t("shortFailed"));
+          }}
+        />
+      )}
     </>
   );
 }

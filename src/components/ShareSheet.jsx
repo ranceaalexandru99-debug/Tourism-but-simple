@@ -7,7 +7,7 @@ import { C, F } from "../theme.js";
 import { useI18n, tripTitle } from "../i18n.js";
 import { downloadICS, printItinerary, printAlbum } from "../exporters.js";
 import { listMemories } from "../gallery.js";
-import { buildAlbum, hasEnoughForAlbum } from "../album.js";
+import { buildAlbum, hasEnoughForAlbum, MIN_PHOTOS } from "../album.js";
 import { isPremium } from "../premium.js";
 import { renderShort, canRenderShort, saveOrShareShort } from "../shortVideo.js";
 import { renderShareCard, canvasToBlob, shareOrDownload } from "../shareImage.js";
@@ -85,7 +85,7 @@ export default function ShareSheet({ route, onClose, printCtx }) {
       const album = buildAlbum(route, await listMemories());
       // Say why rather than opening an empty document — "nothing happened" is
       // the least helpful outcome for a feature someone paid for.
-      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew")); return; }
+      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew", { n: MIN_PHOTOS })); return; }
       await printAlbum(album, printCtx.t, title, printCtx.fmtDate);
     } catch {
       setAlbumMsg(t("albumFailed"));
@@ -108,7 +108,7 @@ export default function ShareSheet({ route, onClose, printCtx }) {
     shortAbort.current = ctrl;
     try {
       const album = buildAlbum(route, await listMemories());
-      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew")); return; }
+      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew", { n: MIN_PHOTOS })); return; }
       const blob = await renderShort(album, {
         title: route.destName,
         subtitle: t("albumPhotos") === "photos" ? `${album.photoCount} photos` : `${album.photoCount} ${t("albumPhotos")}`,

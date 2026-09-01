@@ -12,6 +12,7 @@ import { dayDistanceKm } from "../lib/geo.js";
 import { isPremium, usePremium } from "../lib/premium.js";
 import Paywall from "../components/Paywall.js";
 import { exportAlbumPdf, buildShortPayload, shareShort } from "../lib/albumExport.js";
+import { MIN_PHOTOS } from "../lib/album.js";
 import ShortRenderer from "../components/ShortRenderer.js";
 import { listMemories } from "../lib/gallery.js";
 import {
@@ -246,7 +247,7 @@ export default function Route({ route, onBack, onSaved }) {
         date: (iso) => albumDate(iso, lang),
       });
     } catch (e) {
-      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew") : t("albumFailed"));
+      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS }) : t("albumFailed"));
     } finally {
       setAlbumBusy(false);
     }
@@ -273,7 +274,7 @@ export default function Route({ route, onBack, onSaved }) {
       setShortPayload(payload);
     } catch (e) {
       setShortPct(null);
-      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew") : t("shortFailed"));
+      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS }) : t("shortFailed"));
     }
   };
   const cancelShort = () => { setShortPayload(null); setShortPct(null); };
