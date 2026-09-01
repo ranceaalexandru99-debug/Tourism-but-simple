@@ -140,7 +140,14 @@ export async function renderShort(album, labels, opts = {}) {
   const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
   const chunks = [];
   rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  const finished = new Promise((resolve) => { rec.onstop = resolve; });
+  // onstop was the only way out of this promise. A MediaRecorder that fails
+  // mid-recording — an unsupported codec, memory pressure on a phone — never
+  // fires it, so `await finished` waited forever: the progress bar frozen, the
+  // button disabled, and nothing ever telling the user it had died.
+  const finished = new Promise((resolve, reject) => {
+    rec.onstop = resolve;
+    rec.onerror = (e) => reject(new Error(e?.error?.name || "recorder"));
+  });
 
   const total = INTRO + scenes.length * PER_PHOTO + OUTRO;
   const gold = "#C9A84C";
@@ -261,7 +268,13 @@ export async function renderShort(album, labels, opts = {}) {
     try { rec.stop(); } catch {}
     stream.getTracks().forEach((tr) => { try { tr.stop(); } catch {} });
   }
-  await finished;
+  // Bounded, because rec.stop() throws when the recorder is already inactive —
+  // that throw is swallowed above, and then onstop never comes. Flushing the
+  // last chunks takes well under a second, so ten is generous.
+  await Promise.race([
+    finished,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("stalled")), 10000)),
+  ]);
 
   opts.onProgress?.(1);
   if (opts.signal?.aborted) throw new Error("aborted");

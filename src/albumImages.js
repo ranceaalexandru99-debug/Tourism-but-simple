@@ -29,11 +29,17 @@ export function cellPixels(count) {
 function shrink(dataUrl, target) {
   return new Promise((resolve) => {
     const img = new Image();
-    img.onerror = () => resolve(dataUrl);   // unreadable: keep the original
+    // Neither event is guaranteed — an empty or malformed data URL can leave an
+    // Image silently inert in some browsers. Without this the promise never
+    // settles and the album button stays disabled for the rest of the session,
+    // with no error and nothing to retry. The original is a fine answer.
+    const bail = setTimeout(() => resolve(dataUrl), 10000);
+    const done = (value) => { clearTimeout(bail); resolve(value); };
+    img.onerror = () => done(dataUrl);      // unreadable: keep the original
     img.onload = () => {
       try {
         // Already smaller than the cell — re-encoding would only lose quality.
-        if (Math.max(img.width, img.height) <= target) { resolve(dataUrl); return; }
+        if (Math.max(img.width, img.height) <= target) { done(dataUrl); return; }
         // Square, cover-cropped, because that is exactly how the cell shows it.
         const canvas = document.createElement("canvas");
         canvas.width = target;
@@ -43,9 +49,9 @@ function shrink(dataUrl, target) {
         const w = img.width * scale;
         const h = img.height * scale;
         ctx.drawImage(img, (target - w) / 2, (target - h) / 2, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.82));
+        done(canvas.toDataURL("image/jpeg", 0.82));
       } catch {
-        resolve(dataUrl);
+        done(dataUrl);
       }
     };
     img.src = dataUrl;
@@ -59,8 +65,13 @@ export async function shrinkAlbumPhotos(album) {
   const cache = new Map();
 
   const one = async (photo) => {
-    if (!cache.has(photo.id)) cache.set(photo.id, await shrink(photo.dataUrl, target));
-    return { ...photo, dataUrl: cache.get(photo.id) };
+    // Keyed on the image itself, not on photo.id: an id is normally present,
+    // but any photo missing one would share the key `undefined` with every
+    // other such photo and be handed back the first one's picture — the album
+    // would silently show the wrong images.
+    const key = photo.dataUrl;
+    if (!cache.has(key)) cache.set(key, await shrink(photo.dataUrl, target));
+    return { ...photo, dataUrl: cache.get(key) };
   };
   const many = async (list) => Promise.all(list.map(one));
 
