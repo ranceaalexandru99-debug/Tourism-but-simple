@@ -8,7 +8,7 @@
 export {
   // navigation / chrome
   Home, Map, Camera, User, Search, History, Signal, BatteryFull,
-  ChevronRight, ChevronDown, ArrowRight, ArrowUp, ArrowLeftRight, X, Plus, Check,
+  ChevronRight, ChevronDown, ChevronUp, ArrowRight, ArrowUp, ArrowLeftRight, X, Plus, Check,
   // trip & route
   MapPin, Landmark, TreePine, Drama, ShoppingBag, Users, Utensils, Martini,
   Compass, Navigation, Footprints, Route as RouteIcon, Plane, LocateFixed,

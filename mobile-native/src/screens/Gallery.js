@@ -6,10 +6,11 @@ import { FONT } from "../fonts.js";
 import { Btn } from "../components/ui.js";
 import { pickPhoto, listMemories, addMemory, deleteMemory } from "../lib/gallery.js";
 import { MIN_PHOTOS } from "../lib/album.js";
-import { exportAlbumPdf, buildShortPayload, shareShort } from "../lib/albumExport.js";
+import { exportAlbumPdf, buildShortPayload, buildShortScenes, shareShort } from "../lib/albumExport.js";
 import { isPremium, usePremium } from "../lib/premium.js";
 import Paywall from "../components/Paywall.js";
 import ShortRenderer from "../components/ShortRenderer.js";
+import ShortEditor from "../components/ShortEditor.js";
 import { Camera, Save, X, Trash2, MapPin, TriangleAlert, Lock, Film } from "../icons.js";
 
 // Soft warning once the gallery grows large — photos live on the device.
@@ -152,28 +153,49 @@ export default function Gallery({ saved }) {
   const [shortPct, setShortPct] = useState(null);
   const [shortPayload, setShortPayload] = useState(null);
 
+  // Step one: open the editor. Rendering runs in real time, so choosing what
+  // goes in AFTER paying that wait would be an expensive way to find out you
+  // wanted a different photo.
+  const [editing, setEditing] = useState(null);   // { route, scenes }
+
+  const shortError = (e) => setAlbumMsg(
+    e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS })
+      : e?.message === "noFiles" ? t("albumNoFiles")
+        : t("shortFailed"),
+  );
+
   const makeShort = async (route) => {
     if (!isPremium()) { setPaywall(true); return; }
     setAlbumMsg("");
+    setAlbumBusy(true);
+    try {
+      setEditing({ route, scenes: await buildShortScenes(route, memories) });
+    } catch (e) {
+      shortError(e);
+    } finally {
+      setAlbumBusy(false);
+    }
+  };
+
+  // Step two: render exactly what the editor settled on.
+  const renderEdited = async (route, recipe) => {
+    setEditing(null);
     setShortPct(0);
     try {
-      const mine = (memories || []).filter((m) => m.tripId === route.id);
       const payload = await buildShortPayload(route, memories, {
         title: route.destName,
-        subtitle: `${mine.length} ${t("albumPhotos")}`,
+        // Counted from the recipe, not the trip: after dropping seven of ten
+        // photos the title card must not announce ten.
+        subtitle: `${recipe.filter((x) => x.include).length} ${t("albumPhotos")}`,
         dayPrefix: t("day", { n: "" }).replace(/\s*\{?n?\}?\s*/g, "").trim() || "",
         outro: "Turism, dar simplu!",
-      });
+      }, recipe);
       // Mounting the renderer starts the work; it reports back through the
       // handlers on the element itself, near the bottom of this file.
       setShortPayload(payload);
     } catch (e) {
       setShortPct(null);
-      setAlbumMsg(
-        e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS })
-          : e?.message === "noFiles" ? t("albumNoFiles")
-            : t("shortFailed"),
-      );
+      shortError(e);
     }
   };
 
@@ -333,6 +355,15 @@ export default function Gallery({ saved }) {
       {pending && <Compose photo={pending} saved={saved} onSave={save} onCancel={() => setPending(null)} />}
       {viewing && <Viewer memory={viewing} onClose={() => setViewing(null)} onDelete={remove} />}
       {paywall && <Paywall onClose={() => setPaywall(false)} />}
+
+      {editing && (
+        <ShortEditor
+          visible
+          scenes={editing.scenes}
+          onCancel={() => setEditing(null)}
+          onRender={(recipe) => renderEdited(editing.route, recipe)}
+        />
+      )}
 
       {/* Mounting this starts the render; unmounting it cancels, because the
           WebView doing the encoding goes with it. */}

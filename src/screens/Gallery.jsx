@@ -4,10 +4,12 @@ import { StatusBar, Label, Btn } from "../components/ui.jsx";
 import { useI18n, tripTitle } from "../i18n.js";
 import { addMemory, listMemories, deleteMemory, resizeImage } from "../gallery.js";
 import { buildAlbum, hasEnoughForAlbum, MIN_PHOTOS } from "../album.js";
+import { applyRecipe } from "../shortEdit.js";
 import { printAlbum } from "../exporters.js";
-import { renderShort, canRenderShort, saveOrShareShort } from "../shortVideo.js";
+import { renderShort, canRenderShort, saveOrShareShort, toScenes } from "../shortVideo.js";
 import { isPremium } from "../premium.js";
 import MemoryMap from "../components/MemoryMap.jsx";
+import ShortEditor from "../components/ShortEditor.jsx";
 import { Camera, Save, Trash2, MapPin, TriangleAlert, LayoutGrid, Map, Lock, Film } from "../icons.jsx";
 
 // Soft warning once the gallery grows large — photos live in the browser's
@@ -200,20 +202,35 @@ export default function Gallery({ saved }) {
   // frozen app.
   const [shortPct, setShortPct] = useState(null);
 
-  const makeShort = async (route) => {
+  // Step one: open the editor. Rendering runs in real time, so choosing what
+  // goes in AFTER paying that wait would be an expensive way to find out you
+  // wanted a different photo.
+  const [editing, setEditing] = useState(null);   // { route, album, scenes }
+
+  const makeShort = (route) => {
     if (!isPremium()) { setAlbumMsg(t("albumLocked")); return; }
     if (!canRenderShort()) { setAlbumMsg(t("shortUnsupported")); return; }
     setAlbumMsg("");
+    const album = buildAlbum(route, memories || []);
+    if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew", { n: MIN_PHOTOS })); return; }
+    setEditing({ route, album, scenes: toScenes(album) });
+  };
+
+  // Step two: render exactly what the editor settled on.
+  const renderEdited = async (route, album, recipe) => {
+    setEditing(null);
     setShortPct(0);
+    // Counted from the recipe, not from the album: after dropping seven of ten
+    // photos the title card would otherwise announce ten over a three-photo
+    // video.
+    const chosen = applyRecipe(toScenes(album), recipe).length;
     try {
-      const album = buildAlbum(route, memories || []);
-      if (!hasEnoughForAlbum(album)) { setAlbumMsg(t("albumTooFew", { n: MIN_PHOTOS })); return; }
       const blob = await renderShort(album, {
         title: route.destName,
-        subtitle: `${album.photoCount} ${t("albumPhotos")}`,
+        subtitle: `${chosen} ${t("albumPhotos")}`,
         dayLabel: (n) => t("day", { n }),
         outro: "Turism, dar simplu!",
-      }, { onProgress: setShortPct });
+      }, { onProgress: setShortPct, recipe });
       await saveOrShareShort(blob, `${(route.destName || "trip").replace(/\s+/g, "-").toLowerCase()}.mp4`);
     } catch (e) {
       if (e?.message !== "aborted") setAlbumMsg(t("shortFailed"));
@@ -397,6 +414,14 @@ export default function Gallery({ saved }) {
 
       {pending && <Compose photo={pending} saved={saved} onSave={save} onCancel={() => setPending(null)} />}
       {viewing && <Viewer memory={viewing} onClose={() => setViewing(null)} onDelete={remove} />}
+
+      {editing && (
+        <ShortEditor
+          scenes={editing.scenes}
+          onCancel={() => setEditing(null)}
+          onRender={(recipe) => renderEdited(editing.route, editing.album, recipe)}
+        />
+      )}
     </>
   );
 }

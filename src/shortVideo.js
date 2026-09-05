@@ -15,14 +15,17 @@
 // progress callback and the cap on length; a two-minute wait with no feedback
 // would feel broken.
 
+import { applyRecipe, timeline, sceneAt, DEFAULT_SEC } from "./shortEdit.js";
+
 const W = 1080;
 const H = 1920;
 const FPS = 30;
 
-// Timing, in seconds.
-const INTRO = 2.0;
-const PER_PHOTO = 1.7;
-const OUTRO = 1.5;
+// Timing, in seconds. Photos no longer share one length — each scene carries
+// its own `sec`, chosen in the editor — but the default is the old constant,
+// so a short nobody edited is the same video it always was.
+export const INTRO = 2.0;
+export const OUTRO = 1.5;
 // Beyond this the wait costs more than the video is worth.
 export const MAX_PHOTOS = 18;
 
@@ -120,8 +123,12 @@ export async function renderShort(album, labels, opts = {}) {
   const mime = pickMime();
   if (!mime) throw new Error("unsupported");
 
-  const scenes = toScenes(album);
+  // opts.recipe is what the editor produced: which photos, in what order, each
+  // with its own length. Without one, every photo plays at the default — the
+  // behaviour before the editor existed.
+  const scenes = applyRecipe(toScenes(album), opts.recipe);
   if (!scenes.length) throw new Error("empty");
+  const { starts, photoTime } = timeline(scenes);
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -149,7 +156,7 @@ export async function renderShort(album, labels, opts = {}) {
     rec.onerror = (e) => reject(new Error(e?.error?.name || "recorder"));
   });
 
-  const total = INTRO + scenes.length * PER_PHOTO + OUTRO;
+  const total = INTRO + photoTime + OUTRO;
   const gold = "#C9A84C";
   const ink = "#0A1628";
 
@@ -178,14 +185,14 @@ export async function renderShort(album, labels, opts = {}) {
     if (elapsed < INTRO) { card(labels.title, labels.subtitle, elapsed, INTRO); return; }
 
     const afterIntro = elapsed - INTRO;
-    const idx = Math.floor(afterIntro / PER_PHOTO);
+    const at = sceneAt(scenes, starts, afterIntro);
 
-    if (idx >= scenes.length) {
-      card(labels.outro, "", elapsed - INTRO - scenes.length * PER_PHOTO, OUTRO);
+    if (!at) {
+      card(labels.outro, "", afterIntro - photoTime, OUTRO);
       return;
     }
 
-    const t = (afterIntro % PER_PHOTO) / PER_PHOTO;   // 0..1 within this photo
+    const { idx, t } = at;                            // t is 0..1 within this photo
     const img = images[idx];
     ctx.fillStyle = ink;
     ctx.fillRect(0, 0, W, H);

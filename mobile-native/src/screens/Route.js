@@ -11,9 +11,10 @@ import { countryName, countryFlagOf } from "../lib/countryNames.js";
 import { dayDistanceKm } from "../lib/geo.js";
 import { isPremium, usePremium } from "../lib/premium.js";
 import Paywall from "../components/Paywall.js";
-import { exportAlbumPdf, buildShortPayload, shareShort } from "../lib/albumExport.js";
+import { exportAlbumPdf, buildShortPayload, buildShortScenes, shareShort } from "../lib/albumExport.js";
 import { MIN_PHOTOS } from "../lib/album.js";
 import ShortRenderer from "../components/ShortRenderer.js";
+import ShortEditor from "../components/ShortEditor.js";
 import { listMemories } from "../lib/gallery.js";
 import {
   Star, Clock, Ticket, Lightbulb, NotebookPen, Map, Navigation, Check,
@@ -260,17 +261,30 @@ export default function Route({ route, onBack, onSaved }) {
   // the web app already uses works there unchanged.
   const [shortPayload, setShortPayload] = useState(null);
   const [shortPct, setShortPct] = useState(null);
+  // The editor runs first here too. Two entry points into the same feature
+  // behaving differently would be worse than either behaviour on its own.
+  const [editing, setEditing] = useState(null);
+
   const startShort = async () => {
     if (!isPremium()) { setPaywall(true); return; }
     setAlbumMsg("");
+    try {
+      setEditing(await buildShortScenes(r, listMemories()));
+    } catch (e) {
+      setAlbumMsg(e?.message === "tooFew" ? t("albumTooFew", { n: MIN_PHOTOS }) : t("shortFailed"));
+    }
+  };
+
+  const renderEdited = async (recipe) => {
+    setEditing(null);
     setShortPct(0);
     try {
       const payload = await buildShortPayload(r, listMemories(), {
         title: r.destName,
-        subtitle: `${listMemories().filter((m) => m.tripId === r.id).length} ${t("albumPhotos")}`,
+        subtitle: `${recipe.filter((x) => x.include).length} ${t("albumPhotos")}`,
         dayPrefix: t("day", { n: "" }).replace(/\s*\{?n?\}?\s*/g, "").trim() || "",
         outro: "Turism, dar simplu!",
-      });
+      }, recipe);
       setShortPayload(payload);
     } catch (e) {
       setShortPct(null);
@@ -458,6 +472,10 @@ export default function Route({ route, onBack, onSaved }) {
       </ScrollView>
 
       {paywall && <Paywall onClose={() => setPaywall(false)} />}
+
+      {editing && (
+        <ShortEditor visible scenes={editing} onCancel={() => setEditing(null)} onRender={renderEdited} />
+      )}
 
       {shortPayload && (
         <ShortRenderer

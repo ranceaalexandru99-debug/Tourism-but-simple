@@ -19,6 +19,7 @@ import * as Sharing from "expo-sharing";
 import * as FileSystem from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { buildAlbum, hasEnoughForAlbum, MIN_PHOTOS } from "./album.js";
+import { applyRecipe, timeline } from "./shortEdit.js";
 import { buildAlbumHtml, albumLabels, columnsFor, PAGE_W, PAD, GAP } from "./albumHtml.js";
 
 // Read a photo, resized to the size it is actually printed at.
@@ -119,7 +120,7 @@ export async function exportAlbumPdf(route, memories, labels) {
 // message traffic on top of another second of real-time rendering.
 export const SHORT_MAX_PHOTOS = 12;
 
-export async function buildShortPayload(route, memories, labels) {
+export async function buildShortPayload(route, memories, labels, recipe) {
   const mine = (memories || []).filter((m) => m && m.tripId === route.id && m.uri);
   if (mine.length < MIN_PHOTOS) throw new Error("tooFew");
 
@@ -135,22 +136,66 @@ export async function buildShortPayload(route, memories, labels) {
   const album = buildAlbum(route, inlined);
   if (!hasEnoughForAlbum(album)) throw new Error("tooFew");
 
+  // Built in the same { photo, day, place } shape the web app uses, because
+  // applyRecipe matches scenes by photo id and is shared between the two.
   const scenes = [];
   for (const chapter of album.chapters) {
     for (const place of chapter.stops) {
-      for (const photo of place.photos) {
-        scenes.push({ dataUrl: photo.dataUrl, day: chapter.day, place: place.name, caption: photo.caption || "" });
-      }
+      for (const photo of place.photos) scenes.push({ photo, day: chapter.day, place: place.name });
     }
-    for (const photo of chapter.loose) {
-      scenes.push({ dataUrl: photo.dataUrl, day: chapter.day, place: null, caption: photo.caption || "" });
-    }
+    for (const photo of chapter.loose) scenes.push({ photo, day: chapter.day, place: null });
   }
-  for (const photo of album.extras) {
-    scenes.push({ dataUrl: photo.dataUrl, day: null, place: null, caption: photo.caption || "" });
-  }
+  for (const photo of album.extras) scenes.push({ photo, day: null, place: null });
 
-  return { scenes: scenes.slice(0, SHORT_MAX_PHOTOS), labels };
+  // The recipe decides which photos, in what order, and how long each is held.
+  // Applied here rather than in the WebView so the timing logic lives in one
+  // module shared with the web app — the page only draws what it is handed.
+  const chosen = applyRecipe(scenes.slice(0, SHORT_MAX_PHOTOS), recipe);
+  if (!chosen.length) throw new Error("tooFew");
+  const { starts, photoTime } = timeline(chosen);
+
+  return {
+    // Flattened for the page, which has no use for the rest of the photo record
+    // and must not carry it across the bridge.
+    scenes: chosen.map((s) => ({
+      dataUrl: s.photo.dataUrl,
+      day: s.day,
+      place: s.place,
+      caption: s.photo.caption || "",
+      sec: s.sec,
+    })),
+    starts,
+    photoTime,
+    labels,
+  };
+}
+
+// The scenes the editor shows, before any recipe is applied. Same shape the
+// renderer eventually receives, so one screen can drive both.
+export async function buildShortScenes(route, memories) {
+  const mine = (memories || []).filter((m) => m && m.tripId === route.id && m.uri);
+  if (mine.length < MIN_PHOTOS) throw new Error("tooFew");
+  const inlined = [];
+  for (const m of mine) {
+    // Thumbnail-sized: the editor shows these in a 46pt row, and full-size
+    // base64 for a dozen photos would cost far more memory than the screen
+    // can use. The render inlines its own copies at 720 separately.
+    const dataUrl = await toDataUrl(m.uri, 160);
+    if (dataUrl) inlined.push({ ...m, dataUrl });
+  }
+  if (!inlined.length) throw new Error("noFiles");
+  const album = buildAlbum(route, inlined);
+  if (!hasEnoughForAlbum(album)) throw new Error("tooFew");
+
+  const scenes = [];
+  for (const chapter of album.chapters) {
+    for (const place of chapter.stops) {
+      for (const photo of place.photos) scenes.push({ photo, day: chapter.day, place: place.name });
+    }
+    for (const photo of chapter.loose) scenes.push({ photo, day: chapter.day, place: null });
+  }
+  for (const photo of album.extras) scenes.push({ photo, day: null, place: null });
+  return scenes.slice(0, SHORT_MAX_PHOTOS);
 }
 
 // Hand a finished short to the OS share sheet.

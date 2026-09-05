@@ -30,7 +30,7 @@ export function buildShortRenderHtml(payload) {
 <script>
 const PAYLOAD = ${JSON.stringify(payload)};
 const W = ${SHORT_W}, H = ${SHORT_H}, FPS = 30;
-const INTRO = 2.0, PER = 1.7, OUTRO = 1.5;
+const INTRO = 2.0, OUTRO = 1.5;
 const CHUNK = 512 * 1024;
 
 const send = (msg) => window.ReactNativeWebView.postMessage(JSON.stringify(msg));
@@ -88,7 +88,11 @@ function wrap(ctx, text, maxW) {
       rec.onerror = e => reject(new Error((e && e.error && e.error.name) || "recorder"));
     });
 
-    const total = INTRO + scenes.length * PER + OUTRO;
+    // starts/photoTime are computed on the React Native side by shortEdit.js,
+    // the module the web app uses too. Nothing about timing is decided here:
+    // this page only draws what it is told, so the two encoders cannot drift.
+    const starts = PAYLOAD.starts, photoTime = PAYLOAD.photoTime;
+    const total = INTRO + photoTime + OUTRO;
     const gold = "#C9A84C", ink = "#0A1628";
 
     const card = (title, sub, t, dur) => {
@@ -103,9 +107,11 @@ function wrap(ctx, text, maxW) {
 
     const frame = (el) => {
       if (el < INTRO) return card(PAYLOAD.labels.title, PAYLOAD.labels.subtitle, el, INTRO);
-      const a = el - INTRO, idx = Math.floor(a / PER);
-      if (idx >= scenes.length) return card(PAYLOAD.labels.outro, "", a - scenes.length * PER, OUTRO);
-      const t = (a % PER) / PER, img = imgs[idx];
+      const a = el - INTRO;
+      var idx = -1;
+      for (var i = 0; i < scenes.length; i++) { if (a < starts[i] + scenes[i].sec) { idx = i; break; } }
+      if (idx === -1) return card(PAYLOAD.labels.outro, "", a - photoTime, OUTRO);
+      const t = Math.min(1, Math.max(0, (a - starts[idx]) / scenes[idx].sec)), img = imgs[idx];
       ctx.fillStyle = ink; ctx.fillRect(0, 0, W, H);
       if (img) cover(ctx, img, 1 + t * 0.08);
       const nx = imgs[idx + 1];

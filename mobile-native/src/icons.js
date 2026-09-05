@@ -4,7 +4,7 @@
 
 export {
   Home, Map, Camera, User, Search, History, Signal, BatteryFull,
-  ChevronRight, ArrowRight, ArrowLeftRight, X, Plus, Check,
+  ChevronRight, ChevronUp, ChevronDown, ArrowRight, ArrowLeftRight, X, Plus, Check,
   MapPin, Landmark, TreePine, Drama, ShoppingBag, Users, Utensils, Martini,
   Compass, Navigation, Footprints, Plane, Ticket, TrainFront, Clock, Hourglass,
   Moon, Sun, Sunrise, Share2, Save, Pencil, Trash2, Undo2, RefreshCw, Zap,
