@@ -4,6 +4,7 @@ import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
 import { Btn } from "../components/ui.js";
+import { LinearGradient } from "expo-linear-gradient";
 import PoiImage from "../components/PoiImage.js";
 import RecapSheet from "../components/RecapSheet.js";
 import { CURRENCIES, convert, phrasesFor, goodToKnow } from "../lib/locale.js";
@@ -336,15 +337,32 @@ export default function Route({ route, onBack, onSaved }) {
 
   return (
     <View style={styles.wrap}>
-      {/* Cover */}
-      <View style={{ height: 190 }}>
-        <PoiImage name={r.destName} emoji={r.emoji} tags={r.interests} height={190} radius={0} fontSize={90} />
+      {/* Cover. Taller than the old 190, where it read as a strip rather than
+          a photograph — and the same two overlays the web app uses: a faint
+          dark scrim at the top so the back control survives a bright sky, and
+          a short fade at the bottom so the photo meets the page instead of
+          ending on a hard line. */}
+      <View style={{ height: 224 }}>
+        <PoiImage name={r.destName} emoji={r.emoji} tags={r.interests} height={224} radius={0} fontSize={90} />
+        <LinearGradient
+          pointerEvents="none"
+          colors={["rgba(0,0,0,0.24)", "rgba(0,0,0,0)"]}
+          style={{ position: "absolute", left: 0, right: 0, top: 0, height: 50 }}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={[C.bg + "00", C.bg]}
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 40 }}
+        />
         <Pressable onPress={onBack} hitSlop={12} style={styles.backBtn}>
           <Text style={{ color: C.cream, fontSize: 20 }}>‹</Text>
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 40 }} style={{ marginTop: -8 }}>
+      {/* No negative margin: it used to pull the title 8px onto the cover, so
+          on a narrow phone a wrapped title put dark serif text on sunlit
+          buildings. The title needs ground of its own, not a lucky photo. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 10, paddingBottom: 40 }} style={{ backgroundColor: C.bg }}>
         <View style={styles.titleRow}>
           <View style={styles.emoji}><CategoryIcon tags={r.interests} size={26} color={C.gold} /></View>
           <View style={{ flex: 1 }}>

@@ -1,4 +1,5 @@
 import { View, Text, Image, Pressable, Modal, ScrollView, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
 import { computeTripStats } from "../lib/utils.js";
@@ -28,6 +29,18 @@ export default function RecapSheet({ route, onClose, onShare }) {
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={{ height: 140 }}>
             <PoiImage name={route.destName} emoji={route.emoji} tags={route.interests} height={140} radius={0} fontSize={64} />
+            {/* Matches the web sheet: a touch of shade under the grab handle,
+                and a blended edge instead of the photo stopping dead. */}
+            <LinearGradient
+              pointerEvents="none"
+              colors={["rgba(0,0,0,0.18)", "rgba(0,0,0,0)"]}
+              style={{ position: "absolute", left: 0, right: 0, top: 0, height: 34 }}
+            />
+            <LinearGradient
+              pointerEvents="none"
+              colors={[C.surface + "00", C.surface]}
+              style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 28 }}
+            />
             <View style={styles.grab} />
           </View>
           <ScrollView contentContainerStyle={{ padding: 22 }}>

@@ -46,14 +46,17 @@ export default function RecapSheet({ route, onClose, onShare }) {
         {/* Cover */}
         <div style={{ position: "relative", height: 150 }}>
           <PoiImage name={route.destName} emoji={route.emoji} tags={route.interests} credit height={150} radius={0} fontSize={70} style={{ width: "100%" }} />
+          {/* Was a wash starting at 40%, which bleached most of a 150px photo
+              to make the content below legible. The content has a solid
+              background of its own now, so this only blends the edge. */}
           <div style={{
             position: "absolute", inset: 0, pointerEvents: "none",
-            background: `linear-gradient(180deg, ${C.surface}00 40%, ${C.surface} 100%)`,
+            background: `linear-gradient(180deg, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0) 24%), linear-gradient(180deg, ${C.surface}00 80%, ${C.surface} 100%)`,
           }} />
           <div style={{ position: "absolute", left: "50%", top: 14, transform: "translateX(-50%)", width: 40, height: 5, background: "#fff8", borderRadius: 3 }} />
         </div>
 
-        <div style={{ padding: "0 22px 26px", marginTop: -6 }}>
+        <div style={{ padding: "10px 22px 26px", background: C.surface, position: "relative", zIndex: 1 }}>
           <div style={{ display: "flex", justifyContent: "center" }}><PartyPopper size={28} color={C.gold} /></div>
           <div style={{ fontFamily: F.display, color: C.cream, fontSize: 24, fontWeight: 700, letterSpacing: -0.4, textAlign: "center", marginBottom: 2 }}>
             {t("recapTitle")}

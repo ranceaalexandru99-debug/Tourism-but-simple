@@ -297,17 +297,24 @@ export default function Route({ route, prefs, user, onBack, onUpdate, onSaved })
     <>
       {/* Header — hero cover photo of the destination behind the title */}
       <div style={{ position: "relative", flexShrink: 0 }}>
-        <div style={{ position: "relative", height: 190, overflow: "hidden" }}>
+        {/* Taller than it was: at 190 the cover read as a strip rather than a
+            photograph, and most of what showed was already under the fade. */}
+        <div style={{ position: "relative", height: 224, overflow: "hidden" }}>
           <PoiImage name={route.destName} emoji={route.emoji} tags={route.interests} credit height="100%" radius={0} fontSize={90} style={{ width: "100%" }} />
-          {/* Legibility overlays. The old version washed the WHOLE photo with
-              the porcelain bg color (up to 80% white at the top) — a leftover
-              from the dark theme where the same recipe read as a moody scrim.
-              Now: a faint dark scrim at the very top (for the round controls
-              over bright skies), a clean untouched middle, and a bottom fade
-              into the page background for the title area only. */}
+          {/* Two overlays, each with one job: a faint dark scrim at the very
+              top so the round controls stay visible over a bright sky, and a
+              short fade at the very bottom so the photo meets the page instead
+              of ending on a hard line.
+              The bottom fade used to start at 58% and existed to make the title
+              legible — the title was sitting on the photo and relied on this to
+              rescue it. That washed out most of the picture, and it failed
+              anyway whenever the title wrapped to two lines and rose above the
+              opaque part. The title now has solid ground of its own (below),
+              so this only has to blend an edge: 82% instead of 58% leaves the
+              photograph almost entirely untouched. */}
           <div style={{
             position: "absolute", inset: 0, pointerEvents: "none",
-            background: `linear-gradient(180deg, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0) 26%), linear-gradient(180deg, ${C.bg}00 58%, ${C.bg} 100%)`,
+            background: `linear-gradient(180deg, rgba(0,0,0,0.24) 0%, rgba(0,0,0,0) 22%), linear-gradient(180deg, ${C.bg}00 82%, ${C.bg} 100%)`,
           }} />
         </div>
         {/* Top bar over the cover */}
@@ -339,7 +346,15 @@ export default function Route({ route, prefs, user, onBack, onUpdate, onSaved })
           </div>
         </div>
       </div>
-      <div style={{ flexShrink: 0, padding: "0 18px 16px", marginTop: -8 }}>
+      {/* Solid ground for the title.
+          It used to be pulled up 8px onto the cover and left to survive on
+          whatever the fade happened to leave behind it — which held only while
+          the title stayed on one line. On a narrow phone "Brașov Gourmet · 3
+          zile" wraps, the first line rises into the photograph, and dark serif
+          text lands on sunlit buildings. An explicit background means the text
+          is readable regardless of how it wraps, how long it is, or what the
+          photo happens to show. */}
+      <div style={{ flexShrink: 0, padding: "10px 18px 16px", background: C.bg, position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{
             width: 58, height: 58, borderRadius: 18, flexShrink: 0,
