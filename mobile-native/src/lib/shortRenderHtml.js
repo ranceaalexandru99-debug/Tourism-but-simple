@@ -18,6 +18,8 @@
 //   • The result is chunked on the way out, because a single postMessage of
 //     several megabytes stalls the bridge.
 
+import { DRAW_SOURCE } from "./shortDraw.js";
+
 export const SHORT_W = 720;
 export const SHORT_H = 1280;
 
@@ -29,6 +31,10 @@ export function buildShortRenderHtml(payload) {
 </head><body><canvas id="c" width="${SHORT_W}" height="${SHORT_H}"></canvas>
 <script>
 const PAYLOAD = ${JSON.stringify(payload)};
+// The drawing, serialised from shortDraw.js — the very functions the web
+// encoder calls, not a copy of them. This page decides nothing about how the
+// video looks; it only drives the clock and the recorder.
+${DRAW_SOURCE}
 const W = ${SHORT_W}, H = ${SHORT_H}, FPS = 30;
 const INTRO = 2.0, OUTRO = 1.5;
 const CHUNK = 512 * 1024;
@@ -43,23 +49,6 @@ const pickMime = () => {
 const loadImage = (src) => new Promise(res => {
   const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src;
 });
-
-function cover(ctx, img, zoom) {
-  const s = Math.max(W / img.width, H / img.height) * zoom;
-  const w = img.width * s, h = img.height * s;
-  ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
-}
-
-function wrap(ctx, text, maxW) {
-  const words = String(text).split(/\\s+/); const lines = []; let line = "";
-  for (const word of words) {
-    const next = line ? line + " " + word : word;
-    if (ctx.measureText(next).width > maxW && line) { lines.push(line); line = word; }
-    else line = next;
-  }
-  if (line) lines.push(line);
-  return lines.slice(0, 3);
-}
 
 (async () => {
   try {
@@ -93,54 +82,20 @@ function wrap(ctx, text, maxW) {
     // this page only draws what it is told, so the two encoders cannot drift.
     const starts = PAYLOAD.starts, photoTime = PAYLOAD.photoTime;
     const total = INTRO + photoTime + OUTRO;
-    const gold = "#C9A84C", ink = "#0A1628";
-
-    const card = (title, sub, t, dur) => {
-      const a = Math.min(1, t / (dur * 0.33)) * (1 - Math.max(0, (t - dur * 0.83) / (dur * 0.17)));
-      ctx.fillStyle = ink; ctx.fillRect(0, 0, W, H);
-      ctx.globalAlpha = Math.max(0, a); ctx.textAlign = "center";
-      ctx.fillStyle = gold; ctx.font = "700 64px Georgia, serif";
-      wrap(ctx, title, W - 110).forEach((l, i) => ctx.fillText(l, W / 2, H / 2 - 26 + i * 74));
-      if (sub) { ctx.fillStyle = "#F0EBE0"; ctx.font = "500 30px sans-serif"; ctx.fillText(sub, W / 2, H / 2 + 60); }
-      ctx.globalAlpha = 1; ctx.textAlign = "left";
-    };
-
     const frame = (el) => {
-      if (el < INTRO) return card(PAYLOAD.labels.title, PAYLOAD.labels.subtitle, el, INTRO);
+      if (el < INTRO) return DRAW.card(ctx, W, H, { title: PAYLOAD.labels.title, sub: PAYLOAD.labels.subtitle, t: el, dur: INTRO });
       const a = el - INTRO;
       var idx = -1;
       for (var i = 0; i < scenes.length; i++) { if (a < starts[i] + scenes[i].sec) { idx = i; break; } }
-      if (idx === -1) return card(PAYLOAD.labels.outro, "", a - photoTime, OUTRO);
-      const t = Math.min(1, Math.max(0, (a - starts[idx]) / scenes[idx].sec)), img = imgs[idx];
-      ctx.fillStyle = ink; ctx.fillRect(0, 0, W, H);
-      if (img) cover(ctx, img, 1 + t * 0.08);
-      const nx = imgs[idx + 1];
-      if (nx && t > 0.85) { ctx.globalAlpha = (t - 0.85) / 0.15; cover(ctx, nx, 1); ctx.globalAlpha = 1; }
-      const g = ctx.createLinearGradient(0, H - 410, 0, H);
-      g.addColorStop(0, "rgba(10,22,40,0)"); g.addColorStop(1, "rgba(10,22,40,.88)");
-      ctx.fillStyle = g; ctx.fillRect(0, H - 410, W, 410);
+      if (idx === -1) return DRAW.card(ctx, W, H, { title: PAYLOAD.labels.outro, sub: "", t: a - photoTime, dur: OUTRO });
       const sc = scenes[idx];
-      let y = H - 140;
-      const cap = sc.caption || sc.place || "";
-      if (cap) {
-        ctx.fillStyle = "#F0EBE0"; ctx.font = "700 40px sans-serif";
-        const lines = wrap(ctx, cap, W - 110);
-        y -= (lines.length - 1) * 47;
-        lines.forEach((l, i) => ctx.fillText(l, 55, y + i * 47));
-        y += (lines.length - 1) * 47;
-      }
-      if (sc.day) {
-        const txt = PAYLOAD.labels.dayPrefix + " " + sc.day;
-        ctx.font = "700 26px sans-serif";
-        const tw = ctx.measureText(txt).width;
-        ctx.fillStyle = gold;
-        ctx.beginPath();
-        const bx = 55, by = y + 26, bw = tw + 30, bh = 42, r = 21;
-        ctx.moveTo(bx + r, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, r);
-        ctx.arcTo(bx + bw, by + bh, bx, by + bh, r); ctx.arcTo(bx, by + bh, bx, by, r);
-        ctx.arcTo(bx, by, bx + bw, by, r); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = ink; ctx.fillText(txt, bx + 15, by + 29);
-      }
+      DRAW.photo(ctx, W, H, {
+        img: imgs[idx],
+        next: imgs[idx + 1],
+        t: Math.min(1, Math.max(0, (a - starts[idx]) / scenes[idx].sec)),
+        caption: sc.caption || sc.place || "",
+        dayText: sc.day ? PAYLOAD.labels.dayPrefix + " " + sc.day : "",
+      });
     };
 
     // Pause alongside the recorder when the WebView is backgrounded: rAF stops

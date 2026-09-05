@@ -16,6 +16,7 @@
 // would feel broken.
 
 import { applyRecipe, timeline, sceneAt, DEFAULT_SEC } from "./shortEdit.js";
+import { DRAW } from "./shortDraw.js";
 
 const W = 1080;
 const H = 1920;
@@ -79,39 +80,6 @@ const loadImage = (src) => new Promise((resolve) => {
   img.src = src;
 });
 
-// Cover-fit: fill the frame, crop the overflow. `zoom` slowly enlarges the
-// source rectangle so a still photo drifts instead of sitting dead on screen.
-function drawCover(ctx, img, zoom) {
-  const scale = Math.max(W / img.width, H / img.height) * zoom;
-  const w = img.width * scale;
-  const h = img.height * scale;
-  ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-// Wrap text to a width, returning the lines. Canvas has no text wrapping.
-function wrap(ctx, text, maxWidth) {
-  const words = String(text).split(/\s+/);
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > maxWidth && line) { lines.push(line); line = word; }
-    else line = next;
-  }
-  if (line) lines.push(line);
-  return lines.slice(0, 3);
-}
-
 /**
  * Render the short. Resolves to a Blob.
  *
@@ -157,83 +125,30 @@ export async function renderShort(album, labels, opts = {}) {
   });
 
   const total = INTRO + photoTime + OUTRO;
-  const gold = "#C9A84C";
-  const ink = "#0A1628";
-
-  const card = (title, sub, t, dur) => {
-    // Fade in over the first third, hold, fade out over the last sixth.
-    const a = Math.min(1, t / (dur * 0.33)) * (1 - Math.max(0, (t - dur * 0.83) / (dur * 0.17)));
-    ctx.fillStyle = ink;
-    ctx.fillRect(0, 0, W, H);
-    ctx.globalAlpha = Math.max(0, a);
-    ctx.textAlign = "center";
-    ctx.fillStyle = gold;
-    ctx.font = `700 96px "Fraunces", Georgia, serif`;
-    for (const [i, line] of wrap(ctx, title, W - 160).entries()) {
-      ctx.fillText(line, W / 2, H / 2 - 40 + i * 112);
-    }
-    if (sub) {
-      ctx.fillStyle = "#F0EBE0";
-      ctx.font = `500 44px "Plus Jakarta Sans", sans-serif`;
-      ctx.fillText(sub, W / 2, H / 2 + 90);
-    }
-    ctx.globalAlpha = 1;
-    ctx.textAlign = "left";
-  };
-
   const frame = (elapsed) => {
-    if (elapsed < INTRO) { card(labels.title, labels.subtitle, elapsed, INTRO); return; }
-
-    const afterIntro = elapsed - INTRO;
-    const at = sceneAt(scenes, starts, afterIntro);
-
-    if (!at) {
-      card(labels.outro, "", afterIntro - photoTime, OUTRO);
+    // Every pixel below comes from shortDraw.js, the module the WebView
+    // encoder runs too, so the two can no longer diverge.
+    if (elapsed < INTRO) {
+      DRAW.card(ctx, W, H, { title: labels.title, sub: labels.subtitle, t: elapsed, dur: INTRO });
       return;
     }
 
-    const { idx, t } = at;                            // t is 0..1 within this photo
-    const img = images[idx];
-    ctx.fillStyle = ink;
-    ctx.fillRect(0, 0, W, H);
-    if (img) drawCover(ctx, img, 1 + t * 0.08);       // slow push-in
-
-    // Crossfade the next photo over the last 15% so cuts are not abrupt.
-    const nextImg = images[idx + 1];
-    if (nextImg && t > 0.85) {
-      ctx.globalAlpha = (t - 0.85) / 0.15;
-      drawCover(ctx, nextImg, 1);
-      ctx.globalAlpha = 1;
+    const afterIntro = elapsed - INTRO;
+    const at = sceneAt(scenes, starts, afterIntro);
+    if (!at) {
+      DRAW.card(ctx, W, H, { title: labels.outro, sub: "", t: afterIntro - photoTime, dur: OUTRO });
+      return;
     }
 
-    // Legibility scrim, then the labels over it.
-    const grad = ctx.createLinearGradient(0, H - 620, 0, H);
-    grad.addColorStop(0, "rgba(10,22,40,0)");
-    grad.addColorStop(1, "rgba(10,22,40,0.88)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, H - 620, W, 620);
-
+    const { idx, t } = at;                            // 0..1 within this photo
     const scene = scenes[idx];
-    let y = H - 210;
-    const caption = scene.photo.caption || scene.place || "";
-    if (caption) {
-      ctx.fillStyle = "#F0EBE0";
-      ctx.font = `700 60px "Plus Jakarta Sans", sans-serif`;
-      const lines = wrap(ctx, caption, W - 160);
-      y -= (lines.length - 1) * 70;
-      lines.forEach((line, i) => ctx.fillText(line, 80, y + i * 70));
-      y += (lines.length - 1) * 70;
-    }
-    if (scene.day) {
-      const text = labels.dayLabel(scene.day);
-      ctx.font = `700 38px "Plus Jakarta Sans", sans-serif`;
-      const tw = ctx.measureText(text).width;
-      ctx.fillStyle = gold;
-      roundRect(ctx, 80, y + 40, tw + 44, 62, 31);
-      ctx.fill();
-      ctx.fillStyle = ink;
-      ctx.fillText(text, 102, y + 82);
-    }
+    DRAW.photo(ctx, W, H, {
+      img: images[idx],
+      next: images[idx + 1],
+      t,
+      caption: scene.photo.caption || scene.place || "",
+      dayText: scene.day ? labels.dayLabel(scene.day) : "",
+    });
   };
 
   // Browsers stop firing requestAnimationFrame for a hidden tab, but
