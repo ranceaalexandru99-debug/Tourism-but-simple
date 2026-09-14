@@ -28,7 +28,11 @@ export default function RecapSheet({ route, onClose, onShare }) {
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={{ height: 140 }}>
-            <PoiImage name={route.destName} emoji={route.emoji} tags={route.interests} height={140} radius={0} fontSize={64} />
+            {/* contain, unlike the trip screen's cover. That one is the top of
+                a whole screen and has to reach every edge; this is a wide band
+                at the top of a sheet, where cropping a 3:2 photo into it threw
+                away about two fifths of its height for no gain. */}
+            <PoiImage name={route.destName} emoji={route.emoji} tags={route.interests} height={140} radius={0} fontSize={64} fit="contain" />
             {/* Matches the web sheet: a touch of shade under the grab handle,
                 and a blended edge instead of the photo stopping dead. */}
             <LinearGradient

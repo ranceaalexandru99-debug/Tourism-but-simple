@@ -45,7 +45,11 @@ export default function RecapSheet({ route, onClose, onShare }) {
       }}>
         {/* Cover */}
         <div style={{ position: "relative", height: 150 }}>
-          <PoiImage name={route.destName} emoji={route.emoji} tags={route.interests} credit height={150} radius={0} fontSize={70} style={{ width: "100%" }} />
+          {/* contain, unlike the trip screen's cover. That one is the top of a
+              whole screen and has to reach every edge; this is a 2.3:1 band at
+              the top of a sheet, where cropping a 3:2 photo into it threw away
+              about two fifths of its height for no gain. */}
+          <PoiImage name={route.destName} emoji={route.emoji} tags={route.interests} credit height={150} radius={0} fontSize={70} fit="contain" style={{ width: "100%" }} />
           {/* Was a wash starting at 40%, which bleached most of a 150px photo
               to make the content below legible. The content has a solid
               background of its own now, so this only blends the edge. */}
