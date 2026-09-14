@@ -75,7 +75,10 @@ function StopDetail({ stop, prev, destName, onClose, onToggleDone, onRate, onNot
         <Pressable style={styles.sheet} onPress={() => {}}>
           <View style={styles.grab} />
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <PoiImage name={stop.name} wiki={stop.wiki} context={destName} emoji={stop.emoji} tags={stop.tags} height={170} radius={18} fontSize={64} style={{ marginBottom: 16 }} />
+          {/* contain: this is the one place someone actually looks at the
+              attraction, and a 2:1 band cropped out of a tall photo of a tower
+              keeps the middle of the tower and nothing else. */}
+          <PoiImage name={stop.name} wiki={stop.wiki} context={destName} emoji={stop.emoji} tags={stop.tags} height={190} radius={18} fontSize={64} fit="contain" style={{ marginBottom: 16 }} />
           <Text style={styles.stopTitle}>{stop.name}</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4, marginBottom: 16 }}>
             <Clock size={14} color={C.gold} />

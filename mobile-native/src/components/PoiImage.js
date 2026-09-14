@@ -7,7 +7,13 @@ import { CategoryIcon } from "../icons.js";
 // Real Wikipedia photo for a place, with a category-SVG fallback while loading
 // or when none is found. Mirrors the web PoiImage (`tags` picks the icon;
 // `wiki` = optional explicit article title, `context` = city for searches).
-export default function PoiImage({ name, emoji, tags, wiki, context, width = "100%", height = 150, radius = 18, fontSize = 64, style }) {
+// `fit` decides what happens when the photo's shape does not match the box.
+//   "cover"   — fill the box, crop the overflow. Right for a backdrop behind
+//               text, or a hero that must reach every edge.
+//   "contain" — show the whole photo over a blurred copy of itself filling the
+//               rest. Right wherever the picture IS the content.
+// Mirrors the web component's prop of the same name.
+export default function PoiImage({ name, emoji, tags, wiki, context, width = "100%", height = 150, radius = 18, fontSize = 64, fit = "cover", style }) {
   const [state, setState] = useState({ status: "loading", src: null });
 
   useEffect(() => {
@@ -17,12 +23,15 @@ export default function PoiImage({ name, emoji, tags, wiki, context, width = "10
     return () => { on = false; };
   }, [name, wiki, context]);
 
-  const base = [styles.base, { width, height, borderRadius: radius }, style];
+  const base = [styles.base, { width, height, borderRadius: radius, overflow: "hidden" }, style];
 
   if (state.status === "done" && state.src) {
     return (
       <View style={base}>
-        <Image source={{ uri: state.src }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />
+        {fit === "contain" && (
+          <Image source={{ uri: state.src }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={14} />
+        )}
+        <Image source={{ uri: state.src }} style={{ width: "100%", height: "100%" }} resizeMode={fit} />
       </View>
     );
   }

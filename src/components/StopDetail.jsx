@@ -86,7 +86,10 @@ export default function StopDetail({ stop, prevStop, onClose, onToggleDone, onRa
                     color: C.muted, cursor: "pointer", lineHeight: 0, padding: 6,
                   }}><X size={20} /></button>
                 </div>
-        <PoiImage name={stop.name} wiki={stop.wiki} img={stop.img} category={stop.category} context={destName} credit emoji={stop.emoji} tags={stop.tags} height={170} radius={18} fontSize={64} style={{ marginBottom: 16 }} />
+        {/* contain: this is the one place someone actually looks at the
+            attraction, and a 2:1 band cropped out of a tall photo of a tower
+            keeps the middle of the tower and nothing else. */}
+        <PoiImage name={stop.name} wiki={stop.wiki} img={stop.img} category={stop.category} context={destName} credit emoji={stop.emoji} tags={stop.tags} height={190} radius={18} fontSize={64} fit="contain" style={{ marginBottom: 16 }} />
 
         <div style={{ fontFamily: F.display, color: C.cream, fontSize: 26, fontWeight: 700, letterSpacing: -0.4 }}>{stop.name}</div>
         <div style={{ color: C.gold, fontSize: 14, marginTop: 4, marginBottom: 16, display: "flex", alignItems: "center", gap: 5 }}>
