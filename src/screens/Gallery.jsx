@@ -41,7 +41,10 @@ function Compose({ photo, saved, onSave, onCancel }) {
           <Camera size={19} style={{ verticalAlign: -3, marginRight: 7 }} />{t("galAddTitle")}
         </div>
 
-        <img src={photo} alt="" style={{ width: "100%", borderRadius: 16, marginBottom: 16, maxHeight: 260, objectFit: "cover" }} />
+        {/* contain, not cover: this is the moment someone decides whether to
+            keep the picture and what to call it, and they were being shown a
+            cropped version of it. */}
+        <img src={photo} alt="" style={{ width: "100%", borderRadius: 16, marginBottom: 16, maxHeight: 260, objectFit: "contain", background: C.bg }} />
 
         <input
           value={caption}
@@ -393,8 +396,29 @@ export default function Gallery({ saved }) {
                 overflow: "hidden", cursor: "pointer", textAlign: "left", padding: 0, fontFamily: "inherit",
                 display: "flex", flexDirection: "column",
               }}>
-                <div style={{ width: "100%", aspectRatio: "1 / 1", overflow: "hidden", background: C.surface }}>
-                  <img src={m.dataUrl} alt={m.caption || t("navGallery")} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {/* The whole photo, never a crop of it.
+                    This was a 1:1 tile with object-fit: cover, which hard-crops
+                    to a square — and phone photos are mostly portrait, so it
+                    cut the top and bottom off almost everything. Someone's
+                    picture of a tower lost the tower.
+                    Now the photo is contained, so nothing is lost, and a
+                    blurred, scaled copy of itself fills whatever the shape
+                    leaves over. The tiles stay a uniform 4:5 — taller than
+                    square because that is the shape most of these photos are —
+                    and no edge is thrown away. */}
+                <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 5", overflow: "hidden", background: C.surface }}>
+                  <div aria-hidden="true" style={{
+                    position: "absolute", inset: 0,
+                    backgroundImage: `url(${m.dataUrl})`, backgroundSize: "cover", backgroundPosition: "center",
+                    // Scaled up so the blur's soft edges never show as a seam.
+                    filter: "blur(18px) saturate(1.15)", transform: "scale(1.25)",
+                  }} />
+                  <img
+                    src={m.dataUrl}
+                    alt={m.caption || t("navGallery")}
+                    loading="lazy"
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }}
+                  />
                 </div>
                 <div style={{ padding: "10px 12px" }}>
                   {m.caption ? (

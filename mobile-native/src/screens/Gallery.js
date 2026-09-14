@@ -39,7 +39,10 @@ function Compose({ photo, saved, onSave, onCancel }) {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <Camera size={19} color={C.gold} /><Text style={[styles.sheetTitle, { marginBottom: 0 }]}>{t("galAddTitle")}</Text>
           </View>
-          <Image source={{ uri: photo }} style={styles.preview} resizeMode="cover" />
+          {/* contain, not cover: this is the moment someone decides whether to
+              keep the picture and what to call it, and they were being shown a
+              cropped version of it. */}
+          <Image source={{ uri: photo }} style={styles.preview} resizeMode="contain" />
           <TextInput style={styles.input} placeholder={t("galCaptionPh")} placeholderTextColor={C.muted}
             value={caption} onChangeText={setCaption} />
           {saved.length > 0 && (
@@ -337,7 +340,14 @@ export default function Gallery({ saved }) {
           <View style={styles.grid}>
             {memories.map((m) => (
               <Pressable key={m.id} onPress={() => setViewing(m)} style={styles.card}>
-                <Image source={{ uri: m.uri }} style={styles.thumb} resizeMode="cover" />
+                {/* The whole photo, never a crop of it — the square tile with
+                    resizeMode "cover" cut the top and bottom off every portrait
+                    picture, which is most of them. A blurred copy of the photo
+                    fills whatever its shape leaves over. */}
+                <View style={styles.thumb}>
+                  <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={18} />
+                  <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+                </View>
                 <View style={{ padding: 10 }}>
                   <Text style={{ color: m.caption ? C.cream : C.muted, fontSize: 14, fontFamily: FONT.semibold, fontStyle: m.caption ? "normal" : "italic" }} numberOfLines={1}>
                     {m.caption || t("galNoCaption")}
@@ -398,12 +408,12 @@ const styles = themedStyles(() => StyleSheet.create({
   empty: { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.gold + "55", borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   card: { width: "47%", flexGrow: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: "hidden" },
-  thumb: { width: "100%", aspectRatio: 1, backgroundColor: C.surface },
+  thumb: { width: "100%", aspectRatio: 4 / 5, backgroundColor: C.surface, overflow: "hidden" },
   backdrop: { flex: 1, backgroundColor: "#000c", justifyContent: "flex-end" },
   sheet: { backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, paddingBottom: 30 },
   grab: { width: 40, height: 5, borderRadius: 3, backgroundColor: C.border, alignSelf: "center", marginBottom: 16 },
   sheetTitle: { fontFamily: FONT.display, color: C.cream, fontSize: 21, letterSpacing: -0.3, marginBottom: 14 },
-  preview: { width: "100%", height: 220, borderRadius: 16, marginBottom: 16 },
+  preview: { width: "100%", height: 220, borderRadius: 16, marginBottom: 16, backgroundColor: C.bg },
   input: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, color: C.cream, fontSize: 15, fontFamily: FONT.body, marginBottom: 14 },
   chip: { borderRadius: 999, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 13 },
   viewer: { flex: 1, backgroundColor: "#000e", justifyContent: "center", padding: 16 },
