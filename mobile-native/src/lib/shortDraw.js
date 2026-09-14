@@ -60,6 +60,37 @@ export const DRAW = {
     ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
   },
 
+  // The whole photo inside the frame, centred, nothing cropped.
+  contain(ctx, img, W, H, zoom) {
+    const scale = Math.min(W / img.width, H / img.height) * zoom;
+    const w = img.width * scale;
+    const h = img.height * scale;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+  },
+
+  // A photo filling a 1080×1920 frame, without losing any of it.
+  //
+  // cover() alone was the whole picture here, and in a 9:16 frame that throws
+  // away most of a landscape photo — someone's panorama from the top of the
+  // hill became a narrow vertical slice of it. So: a blurred, over-scaled copy
+  // fills the frame, and the photograph itself sits contained on top of it.
+  // Nothing is cropped, the frame is never empty, and the drift stays on the
+  // sharp copy where it reads.
+  photoFill(ctx, img, W, H, zoom) {
+    // ctx.filter is Chromium-only in practice, which is exactly where both
+    // encoders run — the browser canvas and the Android WebView. Where it is
+    // missing the backdrop simply draws sharp, which is still a filled frame
+    // rather than a broken one.
+    const supported = typeof ctx.filter === "string";
+    if (supported) ctx.filter = "blur(" + Math.round(H / 48) + "px)";
+    DRAW.cover(ctx, img, W, H, 1.18);
+    if (supported) ctx.filter = "none";
+    // Darkened so the sharp photo separates from its own blurred backdrop.
+    ctx.fillStyle = "rgba(10,22,40,0.34)";
+    ctx.fillRect(0, 0, W, H);
+    DRAW.contain(ctx, img, W, H, zoom);
+  },
+
   // Title and outro cards. Fades in over the first third, holds, fades out over
   // the last sixth.
   card(ctx, W, H, o) {
@@ -94,12 +125,12 @@ export const DRAW = {
     const t = o.t;
     ctx.fillStyle = "#0A1628";
     ctx.fillRect(0, 0, W, H);
-    if (o.img) DRAW.cover(ctx, o.img, W, H, 1 + t * 0.08);
+    if (o.img) DRAW.photoFill(ctx, o.img, W, H, 1 + t * 0.08);
 
     // Crossfade the next photo over the last 15% so cuts are not abrupt.
     if (o.next && t > 0.85) {
       ctx.globalAlpha = (t - 0.85) / 0.15;
-      DRAW.cover(ctx, o.next, W, H, 1);
+      DRAW.photoFill(ctx, o.next, W, H, 1);
       ctx.globalAlpha = 1;
     }
 

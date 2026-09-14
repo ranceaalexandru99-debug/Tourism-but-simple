@@ -85,9 +85,10 @@ export function buildAlbumHtml(album, labels) {
   const cols = columnsFor(tiles.length);
   const rows = Math.ceil(tiles.length / cols) || 1;
 
-  // Square cells: the photos have every aspect ratio and their dimensions are
-  // not knowable from a data URL without decoding, so a fixed cell with
-  // object-fit: cover is what makes the page height exactly computable.
+  // Square cells, because the page height has to be exactly computable before
+  // anything is laid out and the photos' dimensions are not knowable from a
+  // data URL without decoding. The cell stays fixed; what happens inside it
+  // does not have to be a crop (see .img img below).
   const cell = (PAGE_W - PAD * 2 - GAP * (cols - 1)) / cols;
   const pageH = Math.round(
     PAD * 2 + HEADER + rows * (cell + CAPTION) + (rows - 1) * GAP + FOOTER,
@@ -126,7 +127,14 @@ export function buildAlbumHtml(album, labels) {
   .t { break-inside: avoid; }
   .img { position: relative; width: 100%; height: ${cell.toFixed(2)}mm;
          border-radius: 2mm; overflow: hidden; background: #EDE8DC; }
-  .img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* contain, not cover. cover hard-cropped every photo to a square, and phone
+     photos are mostly portrait — a picture of a tower came out without the
+     tower. The cell keeps its size, so the page height is still exact; the
+     photo simply sits inside it whole, on the warm mat colour, the way a
+     print album mounts a photograph. Deliberately not a blurred fill like the
+     on-screen gallery: this is going to a PDF and then possibly to paper,
+     where a CSS filter is the first thing a print engine gives up on. */
+  .img img { width: 100%; height: 100%; object-fit: contain; display: block; }
   /* Day badge sits on the picture: the chapter headings are gone, the
      information they carried is not. */
   .d { position: absolute; left: 1.6mm; top: 1.6mm;

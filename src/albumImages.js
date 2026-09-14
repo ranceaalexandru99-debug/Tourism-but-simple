@@ -26,6 +26,19 @@ export function cellPixels(count) {
   return Math.round((cellMm / MM_PER_INCH) * DPI);
 }
 
+/**
+ * The size a `w`×`h` photo becomes when scaled to fit a `target`-square box,
+ * keeping its proportions. Never a crop — the album page contains the photo
+ * rather than cropping it, so it has to be handed a whole one.
+ */
+export function fitWithin(w, h, target) {
+  const scale = target / Math.max(w, h);
+  return {
+    w: Math.max(1, Math.round(w * scale)),
+    h: Math.max(1, Math.round(h * scale)),
+  };
+}
+
 function shrink(dataUrl, target) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -40,15 +53,16 @@ function shrink(dataUrl, target) {
       try {
         // Already smaller than the cell — re-encoding would only lose quality.
         if (Math.max(img.width, img.height) <= target) { done(dataUrl); return; }
-        // Square, cover-cropped, because that is exactly how the cell shows it.
+        // Scaled to fit the cell, NOT cropped to it. This used to render into a
+        // square canvas with a cover crop, which threw away the edges of every
+        // photo that was not square — before the album had any say in it. The
+        // page shows the photo contained now, so it must be handed a whole one.
+        const { w, h } = fitWithin(img.width, img.height, target);
         const canvas = document.createElement("canvas");
-        canvas.width = target;
-        canvas.height = target;
+        canvas.width = w;
+        canvas.height = h;
         const ctx = canvas.getContext("2d");
-        const scale = Math.max(target / img.width, target / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (target - w) / 2, (target - h) / 2, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
         done(canvas.toDataURL("image/jpeg", 0.82));
       } catch {
         done(dataUrl);

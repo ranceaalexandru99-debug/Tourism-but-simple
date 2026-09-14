@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { cellPixels, shrinkAlbumPhotos } from "../albumImages.js";
+import { cellPixels, shrinkAlbumPhotos, fitWithin } from "../albumImages.js";
 
 // These pin the two ways this module could hang or corrupt an album. Both were
 // real: a photo whose Image fires neither load nor error left the promise
@@ -40,6 +40,30 @@ describe("cellPixels", () => {
       expect(cellPixels(n)).toBeGreaterThan(150);
       expect(cellPixels(n)).toBeLessThan(1800);
     }
+  });
+});
+
+describe("fitWithin", () => {
+  it("keeps the photo's proportions instead of squaring it", () => {
+    // This used to render into a square canvas with a cover crop, throwing the
+    // edges away before the album had any say in it.
+    const portrait = fitWithin(900, 1600, 800);
+    expect(portrait).toEqual({ w: 450, h: 800 });
+    expect(portrait.w / portrait.h).toBeCloseTo(900 / 1600, 2);
+
+    const landscape = fitWithin(4000, 2250, 800);
+    expect(landscape).toEqual({ w: 800, h: 450 });
+  });
+
+  it("never exceeds the cell in either direction", () => {
+    for (const [w, h] of [[4000, 2250], [900, 1600], [1000, 1000], [5000, 100]]) {
+      const out = fitWithin(w, h, 600);
+      expect(Math.max(out.w, out.h)).toBeLessThanOrEqual(600);
+    }
+  });
+
+  it("never rounds a very thin photo away to nothing", () => {
+    expect(fitWithin(5000, 3, 600).h).toBeGreaterThanOrEqual(1);
   });
 });
 

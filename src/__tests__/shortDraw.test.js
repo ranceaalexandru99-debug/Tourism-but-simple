@@ -132,6 +132,53 @@ describe("the shared copy", () => {
   });
 });
 
+describe("photoFill", () => {
+  // The last drawImage in the sequence is the sharp photo; the first is the
+  // blurred backdrop behind it.
+  const draws = (calls) => calls.filter((c) => c[0] === "drawImage");
+
+  it("keeps a landscape photo whole inside a 9:16 frame", () => {
+    const c = recorder();
+    const W = 1080, H = 1920;
+    DRAW.photoFill(c, img(4000, 2250), W, H, 1);   // 16:9 into 9:16
+    const [, , x, y, w, h] = draws(c.calls).at(-1);
+    expect(w).toBeLessThanOrEqual(W + 0.001);
+    expect(h).toBeLessThanOrEqual(H + 0.001);
+    expect(x).toBeGreaterThanOrEqual(-0.001);
+    expect(y).toBeGreaterThanOrEqual(-0.001);
+    // The whole width is used, so nothing along it was cut.
+    expect(w).toBeCloseTo(W, 5);
+  });
+
+  it("keeps a portrait photo whole too", () => {
+    const c = recorder();
+    const W = 720, H = 1280;
+    DRAW.photoFill(c, img(900, 1600), W, H, 1);
+    const [, , x, y, w, h] = draws(c.calls).at(-1);
+    expect(w).toBeLessThanOrEqual(W + 0.001);
+    expect(h).toBeLessThanOrEqual(H + 0.001);
+    expect(x).toBeGreaterThanOrEqual(-0.001);
+    expect(y).toBeGreaterThanOrEqual(-0.001);
+  });
+
+  it("fills the frame behind it, so no bar is ever empty", () => {
+    const c = recorder();
+    const W = 1080, H = 1920;
+    DRAW.photoFill(c, img(4000, 2250), W, H, 1);
+    const [, , x, y, w, h] = draws(c.calls)[0];   // the backdrop
+    expect(x).toBeLessThanOrEqual(0);
+    expect(y).toBeLessThanOrEqual(0);
+    expect(x + w).toBeGreaterThanOrEqual(W);
+    expect(y + h).toBeGreaterThanOrEqual(H);
+  });
+
+  it("draws the backdrop first and the photo last", () => {
+    const c = recorder();
+    DRAW.photoFill(c, img(4000, 2250), 1080, 1920, 1);
+    expect(draws(c.calls)).toHaveLength(2);
+  });
+});
+
 describe("palette", () => {
   it("matches the colours the drawing actually uses", () => {
     const c = recorder();
