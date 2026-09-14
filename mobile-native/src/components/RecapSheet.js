@@ -76,7 +76,12 @@ export default function RecapSheet({ route, onClose, onShare }) {
             {photos.length > 0 ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 18 }}>
                 {photos.map((m) => (
-                  <Image key={m.id} source={{ uri: m.uri }} style={styles.thumb} resizeMode="cover" />
+                  // Same as the gallery grid: the whole photo over a blurred
+                  // copy of itself, rather than a square crop of it.
+                  <View key={m.id} style={styles.thumb}>
+                    <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={12} />
+                    <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+                  </View>
                 ))}
               </View>
             ) : (
@@ -102,6 +107,6 @@ const styles = themedStyles(() => StyleSheet.create({
   statLabel: { color: C.muted, fontSize: 10, fontFamily: FONT.extrabold, letterSpacing: 0.5, textTransform: "uppercase", marginTop: 2 },
   catChip: { backgroundColor: C.gold + "18", borderRadius: 999, paddingVertical: 5, paddingHorizontal: 12 },
   section: { color: C.muted, fontSize: 11, fontFamily: FONT.extrabold, letterSpacing: 2, textTransform: "uppercase", marginBottom: 10 },
-  thumb: { width: "31.5%", aspectRatio: 1, borderRadius: 10, backgroundColor: C.card },
+  thumb: { width: "31.5%", aspectRatio: 1, borderRadius: 10, backgroundColor: C.card, overflow: "hidden" },
   noPhotos: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 20, marginBottom: 18 },
 }));

@@ -96,8 +96,15 @@ export default function RecapSheet({ route, onClose, onShare }) {
           {photos && photos.length > 0 ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginBottom: 18 }}>
               {photos.map((m) => (
-                <div key={m.id} style={{ aspectRatio: "1 / 1", borderRadius: 10, overflow: "hidden", background: C.card }}>
-                  <img src={m.dataUrl} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <div key={m.id} style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 10, overflow: "hidden", background: C.card }}>
+                  {/* Same as the gallery grid: the whole photo over a blurred
+                      copy of itself, rather than a square crop of it. */}
+                  <div aria-hidden="true" style={{
+                    position: "absolute", inset: 0,
+                    backgroundImage: `url(${m.dataUrl})`, backgroundSize: "cover", backgroundPosition: "center",
+                    filter: "blur(10px) saturate(1.15)", transform: "scale(1.3)",
+                  }} />
+                  <img src={m.dataUrl} alt="" loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain" }} />
                 </div>
               ))}
             </div>

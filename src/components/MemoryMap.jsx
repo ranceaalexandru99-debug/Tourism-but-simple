@@ -25,13 +25,23 @@ export default function MemoryMap({ memories, onPick }) {
       const marker = L.marker(m.ll, {
         icon: L.divIcon({
           className: "",
+          // A circle cannot letterbox, so the photo used to be centre-cropped
+          // into it — and a portrait shot lost its top and bottom entirely,
+          // which on a 44px pin is most of the subject. Same answer as the
+          // gallery grid: a blurred copy fills the circle, the photo sits whole
+          // on top of it. Slightly larger too, because a contained photo needs
+          // the room to stay recognisable.
           html: `<div style="
-            width:44px;height:44px;border-radius:50%;overflow:hidden;
+            position:relative;width:52px;height:52px;border-radius:50%;overflow:hidden;
             border:2px solid ${C.gold};box-shadow:0 4px 12px #000a;background:${C.card}">
-            <img src="${m.dataUrl}" style="width:100%;height:100%;object-fit:cover" />
+            <img src="${m.dataUrl}" aria-hidden="true" style="
+              position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+              filter:blur(6px) saturate(1.15);transform:scale(1.3)" />
+            <img src="${m.dataUrl}" style="
+              position:absolute;inset:0;width:100%;height:100%;object-fit:contain" />
           </div>`,
-          iconSize: [44, 44],
-          iconAnchor: [22, 22],
+          iconSize: [52, 52],
+          iconAnchor: [26, 26],
         }),
       }).addTo(map);
       if (onPick) marker.on("click", () => onPick(m));
