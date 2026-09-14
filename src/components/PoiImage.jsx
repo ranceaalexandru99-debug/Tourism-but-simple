@@ -27,7 +27,15 @@ export const commonsUrl = (file, width = 640) =>
 // A category icon is right; a confident photo of the wrong place is not.
 const NO_ARTICLE_EXISTS = new Set(["bar", "nightclub", "livemusic", "restaurant", "cafe", "shopping"]);
 
-export default function PoiImage({ name, emoji, tags, wiki, context, category, credit = false, img, fallbackImg, width = "100%", height = 150, radius = 18, fontSize = 64, style }) {
+// `fit` decides what happens when the photo's shape does not match the box.
+//   "cover"   — fill the box, crop the overflow. Right for a backdrop behind
+//               text, or a hero that must reach every edge.
+//   "contain" — show the whole photo over a blurred copy of itself filling the
+//               rest. Right wherever the picture IS the content and cropping it
+//               would throw away what someone is looking at.
+// It is a prop rather than a global change because the trip cover genuinely has
+// to fill its frame: letterboxing it would be worse than the crop.
+export default function PoiImage({ name, emoji, tags, wiki, context, category, credit = false, img, fallbackImg, width = "100%", height = 150, radius = 18, fontSize = 64, fit = "cover", style }) {
   // An explicit wiki title is evidence this particular place DOES have an
   // article, so it overrides the category rule.
   const hopeless = !img && !wiki && NO_ARTICLE_EXISTS.has(category);
@@ -75,6 +83,13 @@ export default function PoiImage({ name, emoji, tags, wiki, context, category, c
     };
     return (
       <div style={base}>
+        {fit === "contain" && (
+          <div aria-hidden="true" style={{
+            position: "absolute", inset: 0,
+            backgroundImage: `url(${state.src})`, backgroundSize: "cover", backgroundPosition: "center",
+            filter: "blur(10px) saturate(1.15)", transform: "scale(1.3)",
+          }} />
+        )}
         <img
           src={state.src}
           alt={name}
@@ -86,7 +101,7 @@ export default function PoiImage({ name, emoji, tags, wiki, context, category, c
           // the lowercase attribute passes straight through to the DOM.
           fetchpriority={credit ? "high" : "auto"}
           onError={onImgError}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{ position: "relative", width: "100%", height: "100%", objectFit: fit }}
         />
         {credit && wikiUrl && (
           <a
@@ -128,12 +143,19 @@ export default function PoiImage({ name, emoji, tags, wiki, context, category, c
   if (fallbackImg) {
     return (
       <div style={base}>
+        {fit === "contain" && (
+          <div aria-hidden="true" style={{
+            position: "absolute", inset: 0,
+            backgroundImage: `url(${fallbackImg})`, backgroundSize: "cover", backgroundPosition: "center",
+            filter: "blur(10px) saturate(1.15)", transform: "scale(1.3)",
+          }} />
+        )}
         <img
           src={fallbackImg}
           alt={name}
           loading="lazy"
           onError={(e) => { e.currentTarget.style.display = "none"; }}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{ position: "relative", width: "100%", height: "100%", objectFit: fit }}
         />
       </div>
     );

@@ -253,11 +253,17 @@ export default function Explore({ onQuick, onClose }) {
           boxShadow: C.shadow, padding: 12, display: "flex", gap: 12, alignItems: "center",
           animation: "vai-rise .22s ease both",
         }}>
+          {/* contain: this thumbnail is the only look at the city someone gets
+              before deciding to plan a trip there, and a cityscape cropped to a
+              square loses the sides — which is usually where the skyline is.
+              Landscape rather than square, because contain in a 76px square
+              turned a panorama into a 33px strip: showing the whole photo is
+              only worth it if the whole photo is still big enough to read. */}
           <PoiImage
             name={selected.n}
             img={selected.img}
             context={countryName(selected.c) || selected.c}
-            width={76} height={76} radius={14} fontSize={40}
+            width={104} height={78} radius={14} fontSize={40} fit="contain"
           />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{
