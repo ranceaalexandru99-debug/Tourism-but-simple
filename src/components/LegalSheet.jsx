@@ -47,7 +47,9 @@ export default function LegalSheet({ onClose }) {
           <div style={{ fontFamily: F.display, color: C.cream, fontSize: 21, fontWeight: 700, letterSpacing: -0.3, display: "flex", alignItems: "center", gap: 8 }}>
             <Scale size={19} color={C.gold} />{t("legalTitle")}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", lineHeight: 0 }}><X size={20} /></button>
+          {/* Icon-only, so it needs a name of its own: a screen reader
+              announces an unlabelled button as just "button". */}
+          <button onClick={onClose} aria-label={t("back")} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", lineHeight: 0 }}><X size={20} /></button>
         </div>
         <div style={{ color: C.muted, fontSize: 12, marginBottom: showEnNote ? 10 : 18 }}>{L.updated}</div>
         {showEnNote && (
