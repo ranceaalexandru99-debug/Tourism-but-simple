@@ -1,8 +1,18 @@
-// Tier-1 destinations: pre-generated POI files sourced from OpenStreetMap, one
-// JSON per city at public/pois/{qid}.json. Lazy-loaded + cached. This module
-// bridges the OSM schema to the `dest` shape assembleRoute() consumes, so an
-// OSM-backed city yields an itinerary structurally identical to the hand-
-// curated ones — the rest of the app can't tell the difference.
+// Tier-1 destinations: POIs sourced from OpenStreetMap, read from the
+// `city_pois` table in Supabase and cached per city. This module bridges the
+// OSM schema to the `dest` shape assembleRoute() consumes, so an OSM-backed
+// city yields an itinerary structurally identical to the hand-curated ones —
+// the rest of the app can't tell the difference.
+//
+// It used to read one JSON per city from public/pois/{qid}.json. Those files
+// now live in data/pois/ (4,612 cities, 47 MB, gitignored as derived data) and
+// are UPLOADED to Supabase by scripts/migrate-cities-to-supabase.mjs. There is
+// deliberately no file fallback: shipping 47 MB of JSON to every visitor to
+// cover cities most of them will never open is worse than a database query.
+//
+// The consequence is worth stating plainly: until that migration has run, this
+// returns null for every city, and trips fall through to the live Overpass
+// fetch — real results, but 5-25 seconds instead of instant.
 //
 // Data © OpenStreetMap contributors (ODbL).
 
