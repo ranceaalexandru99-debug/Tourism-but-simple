@@ -2,6 +2,12 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import { C } from "../theme.js";
 
+// Leaflet's divIcon takes raw HTML, which puts this file outside React's
+// escaping. Anything interpolated into an attribute goes through here.
+const escAttr = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+));
+
 // Renders gallery memories that have coordinates as photo-thumbnail pins on a
 // dark map. Tapping a pin opens a popup with the photo + caption.
 export default function MemoryMap({ memories, onPick }) {
@@ -31,13 +37,17 @@ export default function MemoryMap({ memories, onPick }) {
           // gallery grid: a blurred copy fills the circle, the photo sits whole
           // on top of it. Slightly larger too, because a contained photo needs
           // the room to stay recognisable.
+          // The photo is a canvas-produced data URL today, so it cannot carry a
+          // quote — but this is a raw HTML string handed to Leaflet, and that
+          // guarantee lives three modules away. Escaping it here means the
+          // safety is local to the code that needs it.
           html: `<div style="
             position:relative;width:52px;height:52px;border-radius:50%;overflow:hidden;
             border:2px solid ${C.gold};box-shadow:0 4px 12px #000a;background:${C.card}">
-            <img src="${m.dataUrl}" aria-hidden="true" style="
+            <img src="${escAttr(m.dataUrl)}" aria-hidden="true" style="
               position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
               filter:blur(6px) saturate(1.15);transform:scale(1.3)" />
-            <img src="${m.dataUrl}" style="
+            <img src="${escAttr(m.dataUrl)}" style="
               position:absolute;inset:0;width:100%;height:100%;object-fit:contain" />
           </div>`,
           iconSize: [52, 52],

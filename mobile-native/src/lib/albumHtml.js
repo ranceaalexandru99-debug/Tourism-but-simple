@@ -98,7 +98,7 @@ export function buildAlbumHtml(album, labels) {
     const label = photo.caption || place || "";
     return `
     <figure class="t">
-      <div class="img"><img src="${photo.dataUrl}" alt="${esc(label)}">
+      <div class="img"><img src="${esc(photo.dataUrl)}" alt="${esc(label)}">
         ${day ? `<span class="d">${esc(labels.day(day))}</span>` : ""}
       </div>
       ${label ? `<figcaption>${esc(label)}</figcaption>` : "<figcaption></figcaption>"}

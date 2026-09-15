@@ -20,6 +20,28 @@
 
 import { DRAW_SOURCE } from "./shortDraw.js";
 
+/**
+ * Serialise a value for embedding inside an HTML <script> block.
+ *
+ * JSON.stringify alone is NOT safe here. The payload carries the user's own
+ * photo captions, and a caption containing "</script>" closed the tag and
+ * everything after it ran as markup — verified: one <script> became four.
+ * In this app that is not merely self-XSS: the injected code runs inside a
+ * WebView holding window.ReactNativeWebView.postMessage, so it can drive the
+ * React Native side, which writes files from what it is told.
+ *
+ * Escaping "<" covers "</script>" and "<!--" both; U+2028 and U+2029 are legal
+ * in JSON strings but are line terminators in JavaScript, which would end the
+ * statement early.
+ */
+export function jsonForScript(value) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003C")
+    .replace(/>/g, "\\u003E")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 export const SHORT_W = 720;
 export const SHORT_H = 1280;
 
@@ -30,7 +52,7 @@ export function buildShortRenderHtml(payload) {
 <style>html,body{margin:0;background:#0A1628;overflow:hidden}canvas{display:none}</style>
 </head><body><canvas id="c" width="${SHORT_W}" height="${SHORT_H}"></canvas>
 <script>
-const PAYLOAD = ${JSON.stringify(payload)};
+const PAYLOAD = ${jsonForScript(payload)};
 // The drawing, serialised from shortDraw.js — the very functions the web
 // encoder calls, not a copy of them. This page decides nothing about how the
 // video looks; it only drives the clock and the recorder.

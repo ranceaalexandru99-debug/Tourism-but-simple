@@ -58,14 +58,21 @@ export default function ShortRenderer({ payload, onProgress, onDone, onError }) 
     for (let i = 0; i < n; i++) if (typeof parts.current[i] !== "string") missing.push(i);
     if (missing.length) { settled.current = true; onError?.("incomplete"); return; }
 
+    // `mime` arrives in a message from the WebView and used to be interpolated
+    // straight into a file path. The page is ours, but everything it renders is
+    // not — captions come from the user — so treating its messages as trusted
+    // input was a step too far: a value like "mp4/../../x" would have written
+    // outside the shorts directory. Only these two are ever legitimate.
+    const ext = mime === "mp4" || mime === "webm" ? mime : "mp4";
+
     try {
       const base64 = parts.current.join("");
       const dir = FileSystem.cacheDirectory + "shorts/";
       await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
-      const uri = `${dir}short-${Date.now()}.${mime}`;
+      const uri = `${dir}short-${Date.now()}.${ext}`;
       await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
       settled.current = true;
-      onDone?.(uri, mime);
+      onDone?.(uri, ext);
     } catch (e) {
       settled.current = true;
       onError?.(String(e?.message || e));
