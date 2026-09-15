@@ -268,16 +268,19 @@ export async function getCitiesInBounds(bounds, { zoom = 6, limit = 120 } = {}) 
     .order("rank", { ascending: false })
     .limit(limit);
 
-  try {
-    const results = await Promise.all(lonRanges(west, east).map(([w, e]) => query(w, e)));
-    const rows = results.flatMap((r) => (r.error ? [] : r.data || []));
-    return rows
-      .sort((a, b) => b.rank - a.rank)
-      .slice(0, limit)
-      .map(toCity);
-  } catch {
-    return [];
-  }
+  // Failures are NOT swallowed into an empty list. "The server is unreachable"
+  // and "there are no cities here" are different facts, and returning [] for
+  // both left the map telling people to move it — advice that could never work,
+  // forever, with nothing saying why. The caller decides what to show.
+  const results = await Promise.all(lonRanges(west, east).map(([w, e]) => query(w, e)));
+  const failed = results.find((r) => r.error);
+  if (failed) throw new Error(failed.error.message || "query_failed");
+
+  return results
+    .flatMap((r) => r.data || [])
+    .sort((a, b) => b.rank - a.rank)
+    .slice(0, limit)
+    .map(toCity);
 }
 
 // Continent slice — kept for parity with the previous module.

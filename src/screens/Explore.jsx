@@ -58,6 +58,8 @@ export default function Explore({ onQuick, onClose }) {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [locateError, setLocateError] = useState(false);
+  // The last query failed outright, as opposed to finding nothing.
+  const [failed, setFailed] = useState(false);
   // Latest zoom, so the hint about smaller towns only shows when zooming in
   // would actually reveal any.
   const [zoom, setZoom] = useState(loadView().zoom);
@@ -105,6 +107,14 @@ export default function Explore({ onQuick, onClose }) {
       }, { zoom: z }).then((rows) => {
         if (mine !== seqRef.current) return;  // a newer viewport won
         setCities(rows);
+        setFailed(false);
+        setLoading(false);
+      }).catch(() => {
+        // Unreachable is not the same as empty. Without this the map told
+        // people to move it, which could never help, with nothing saying why.
+        if (mine !== seqRef.current) return;
+        setCities([]);
+        setFailed(true);
         setLoading(false);
       });
     };
@@ -220,10 +230,14 @@ export default function Explore({ onQuick, onClose }) {
       {!loading && cities.length === 0 && (
         <div style={{
           position: "absolute", left: 14, right: 14, bottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)",
-          zIndex: 500, background: C.surface, border: `1px solid ${C.border}`,
-          borderRadius: 14, padding: "12px 14px", color: C.mutedLight,
+          zIndex: 500, background: C.surface,
+          border: `1px solid ${failed ? `${C.red}55` : C.border}`,
+          borderRadius: 14, padding: "12px 14px",
+          color: failed ? C.red : C.mutedLight,
           fontSize: 13, textAlign: "center", boxShadow: C.shadow,
-        }}>{t("exploreEmpty")}</div>
+          // Telling someone to move the map is useless advice when the server
+          // is the problem — and they would follow it forever.
+        }}>{failed ? t("exploreUnavailable") : t("exploreEmpty")}</div>
       )}
       {locateError && (
         <div style={{
