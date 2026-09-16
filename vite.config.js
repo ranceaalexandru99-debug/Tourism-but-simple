@@ -1,3 +1,5 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteSingleFile } from "vite-plugin-singlefile";
@@ -65,6 +67,30 @@ export default defineConfig(({ mode }) => ({
   preview: {
     port: 5175, strictPort: true, host: true, allowedHosts: true,
   },
+  // Vitest. The native app's modules are plain JavaScript and worth testing
+  // from here — the alternative is a second test runner with its own React
+  // Native stack, for logic that needs none of it.
+  //
+  // What stops them importing is the expo packages: each pulls in
+  // expo-modules-core and then react-native, whose Flow syntax vitest cannot
+  // parse. Aliasing them to small stubs makes any native module importable.
+  test: {
+    alias: {
+      ...Object.fromEntries(
+        [
+          "expo-crypto", "expo-file-system", "expo-image-picker",
+          "expo-constants", "react-native",
+        ].map((pkg) => [
+          pkg,
+          path.resolve(
+            path.dirname(fileURLToPath(import.meta.url)),
+            `src/__tests__/stubs/${pkg}.js`,
+          ),
+        ]),
+      ),
+    },
+  },
+
   server: {
     port: 5173, open: true, host: true, allowedHosts: true,
     // Route /api to the local API server (npm run server) so the browser sees

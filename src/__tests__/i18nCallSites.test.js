@@ -42,14 +42,31 @@ describe("t() call sites", () => {
     const offenders = [];
     for (const file of files) {
       const src = fs.readFileSync(file, "utf8");
-      const lines = src.split("\n");
-      lines.forEach((line, i) => {
+      // Every identifier the file declares or binds, collected ONCE.
+      //
+      // This used to build a fresh RegExp per suspect and run it over the whole
+      // source — with heavy backtracking in one branch — which made the test
+      // take over five seconds. That is vitest's default timeout, so alone it
+      // passed and inside the full suite it failed at random. A slow test that
+      // fails for no reason is worse than no test: people learn to re-run it.
+      const declared = new Set();
+      for (const re of [
+        /\b(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g,  // declarations
+        /\b([A-Za-z_$][\w$]*)\s*(?:=>|=[^=])/g,                      // assignments, arrows
+        /\{([^{}]*)\}\s*=/g,                                         // destructuring
+        /import\s+([^;]+?)\s+from/g,                                 // imports
+        /\(([^()]*)\)\s*=>/g,                                        // arrow parameters
+      ]) {
+        for (const m of src.matchAll(re)) {
+          for (const name of String(m[1]).match(/[A-Za-z_$][\w$]*/g) || []) declared.add(name);
+        }
+      }
+
+      src.split("\n").forEach((line, i) => {
         for (const m of line.matchAll(SUSPECT)) {
           const name = m[1];
-          if (DYNAMIC_OK.has(name)) continue;
-          // A real variable is declared or imported somewhere in the file.
-          const declared = new RegExp(`(const|let|var|function)\\s+${name}\\b|\\b${name}\\s*[,}]?\\s*(=>|=)|\\{[^}]*\\b${name}\\b[^}]*\\}\\s*=|import[^;]*\\b${name}\\b`).test(src);
-          if (!declared) offenders.push(`${file}:${i + 1}  ${line.trim().slice(0, 90)}`);
+          if (DYNAMIC_OK.has(name) || declared.has(name)) continue;
+          offenders.push(`${file}:${i + 1}  ${line.trim().slice(0, 90)}`);
         }
       });
     }
