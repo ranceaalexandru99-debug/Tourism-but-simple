@@ -80,6 +80,7 @@ export default defineConfig(({ mode }) => ({
         [
           "expo-crypto", "expo-file-system", "expo-image-picker",
           "expo-constants", "react-native",
+          "expo-print", "expo-sharing", "expo-image-manipulator",
         ].map((pkg) => [
           pkg,
           path.resolve(
