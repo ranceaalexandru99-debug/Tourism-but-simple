@@ -52,6 +52,110 @@ for a declaration form — worth avoiding.
       is false and the paywall honestly says billing is unavailable.
 - [ ] Build: `eas build --profile production --platform android`.
 
+## Selling the subscription
+
+Nothing is left to build. `premium.js` talks to RevenueCat, `Paywall.js` shows
+the store's own localised price and offers "Restore purchases", and with no key
+configured the app says billing is unavailable rather than showing a button
+that takes no money. What remains is account setup, and it has to happen in
+this order — each step needs the one before it.
+
+### 1. Google Play Console — €25, once
+
+Create the developer account, then the app, with the package name already in
+`app.json`: `com.turismdarsimplu.app`. It cannot be changed after the first
+upload, so it is worth being sure of now.
+
+Identity verification takes days, sometimes weeks. Start it before anything
+else, because nothing below can be finished without it.
+
+### 2. A payments profile
+
+Subscriptions need a merchant account linked to the Play Console: bank details,
+tax information, the address payouts go to. Google withholds payouts until it
+is complete.
+
+### 3. The subscription product
+
+In Play Console → Monetise → Subscriptions. Two decisions are yours alone:
+
+- **Period.** A monthly plan and an annual one at a discount is the usual pair.
+  Annual subscribers churn far less; monthly lowers the barrier to trying.
+- **Price.** Play sets local prices per country from your base price, and the
+  app never hard-codes one: `Paywall.js` renders `priceString` exactly as the
+  store reports it, which is both correct and required.
+
+A free trial or an introductory price is configured here too, not in the app.
+
+### 4. RevenueCat
+
+Free below roughly $2.5k of monthly tracked revenue, which is where this will
+be for a long time.
+
+- Create a project, add the Android app with the same package name
+- Upload the Play service-account credentials so receipts can be validated
+  server-side — this is the whole reason for using it: without it, "has this
+  person paid?" is a question the phone answers to itself, and the answer is
+  trivially forged
+- Create an entitlement named **exactly** `premium`. `ENTITLEMENT` in
+  `premium.js` is that string; a typo is a silent "nobody is ever entitled",
+  which is why a test pins it
+- Attach the Play products to that entitlement, in an offering marked current —
+  `getOffering()` reads `offerings.current`
+
+### 5. The key
+
+Copy the RevenueCat **public** Android SDK key into `app.json` →
+`extra.revenueCatAndroidKey`. It is designed to ship inside the app; the
+secret key stays in RevenueCat and never appears here.
+
+`billingConfigured` is `key && sdk`, so it stays false until this is done AND
+the app is a real build — see the next point.
+
+### 6. Build and test without spending money
+
+`react-native-purchases` is a native module, so it does not exist in Expo Go
+and billing reports itself unavailable there. Testing purchases needs a real
+build:
+
+```
+eas build --profile production --platform android
+```
+
+Upload it to **internal testing**, then add your own Google account under
+Play Console → Setup → License testing. Testers see the real purchase flow,
+are charged nothing, and renewals are compressed — a monthly subscription
+renews every few minutes, so a year of behaviour can be watched over lunch.
+
+Test, at minimum: buying, cancelling from the Play subscription centre and
+losing access, resubscribing, and "Restore purchases" on a second device.
+
+### What Play requires of the paywall
+
+Most of this is already true; it is listed so a future change does not quietly
+break compliance.
+
+- The price, the period and the renewal terms must be visible **before** the
+  purchase — the store's own price string satisfies this
+- A way to restore purchases — the button exists, and it is not optional
+- No link out to another payment method for digital goods; Play billing or
+  nothing
+- Cancellation is handled by Play, not by the app. Do not build a cancel
+  button; point at the Play subscription centre if anything
+- The privacy policy and the account-deletion URL from the list above must be
+  live before review
+
+### The web app cannot sell this
+
+Selling the same subscription on the web would need a second payment provider,
+a real account system to attach an entitlement to, and a way to reconcile the
+two — and the app's accounts are local to the device. The web build says the
+subscription is handled in the Android app and stops there, which is honest and
+costs nothing to maintain.
+
+If web selling ever matters, the order is: real accounts with a backend first,
+then Stripe, then teach RevenueCat about it. Not before.
+
 ## Known gaps, deliberately
 
 - **Accounts do not survive the device.** They are local, so there is no
