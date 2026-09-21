@@ -2,13 +2,13 @@
 //
 // The entitlement comes from RevenueCat, which sits on top of Google Play
 // Billing and validates the purchase receipt server-side. That validation is
-// the reason for using it: without it, "is this user subscribed?" is a question
+// the reason for using it: without it, "has this person paid?" is a question
 // the phone answers to itself, and the answer is trivially forged.
 //
 // Everything else in the app asks isPremium() and nothing else. That call has
 // to be SYNCHRONOUS because it decides what a screen renders, while the store
 // answers asynchronously — so the last known answer is cached here and the
-// network result updates it, notifying subscribers.
+// network result updates it, notifying listeners.
 //
 // Without an API key configured the app still runs: nothing is entitled, the
 // paid buttons stay locked, and no error is shown. A missing key is a
@@ -58,7 +58,7 @@ const apiKey = Platform.select({
 export const billingConfigured = Boolean(apiKey) && billingAvailable();
 
 // Last known answer, read synchronously on boot from the AsyncStorage-backed
-// shim so a returning subscriber is not locked out for the second it takes the
+// shim so someone who has already paid is not locked out for the second it takes the
 // store to reply.
 let entitled = (() => {
   try { return localStorage.getItem(KEY) === "1"; } catch { return false; }
@@ -95,7 +95,7 @@ export function initPremium() {
       return true;
     } catch {
       // Offline, or the store is unavailable. The cached answer stands: a
-      // paying subscriber must not lose access because a flight has no signal.
+      // buyer must not lose access because a flight has no signal.
       return false;
     }
   })();
@@ -111,7 +111,7 @@ export function onPremiumChange(fn) {
   return () => listeners.delete(fn);
 }
 
-// The subscription offering, with prices as the store reports them. Never
+// The offering, with prices as the store reports them. Never
 // hard-code a price: it varies by country and currency, and both stores require
 // the real localised one to be shown.
 export async function getOffering() {
@@ -137,7 +137,7 @@ export async function purchase(pkg) {
   return ok;
 }
 
-// Both stores require this: a subscriber reinstalling, or on a second device,
+// Both stores require this: a buyer reinstalling, or on a second device,
 // must be able to get their access back without paying twice.
 export async function restore() {
   if (!billingConfigured) throw new Error("notconfigured");

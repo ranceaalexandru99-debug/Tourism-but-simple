@@ -1,4 +1,4 @@
-// The subscription sheet.
+// The purchase sheet.
 //
 // Prices come from the store, never from us: they differ by country and
 // currency, and both Google and Apple require the real localised price to be
@@ -114,7 +114,7 @@ export default function Paywall({ onClose, onUnlocked, onShowLegal }) {
                 style={{ marginBottom: 10 }}
               >
                 {/* priceString is already formatted in the buyer's currency. */}
-                {`${pkg.product.title || t("paywallSubscribe")} — ${pkg.product.priceString}`}
+                {`${pkg.product.title || t("paywallUnlock")} — ${pkg.product.priceString}`}
               </Btn>
             ))}
 

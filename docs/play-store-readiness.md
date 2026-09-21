@@ -52,7 +52,7 @@ for a declaration form — worth avoiding.
       is false and the paywall honestly says billing is unavailable.
 - [ ] Build: `eas build --profile production --platform android`.
 
-## Selling the subscription
+## Selling the unlock
 
 Nothing is left to build. `premium.js` talks to RevenueCat, `Paywall.js` shows
 the store's own localised price and offers "Restore purchases", and with no key
@@ -71,21 +71,36 @@ else, because nothing below can be finished without it.
 
 ### 2. A payments profile
 
-Subscriptions need a merchant account linked to the Play Console: bank details,
+Taking money needs a merchant account linked to the Play Console: bank details,
 tax information, the address payouts go to. Google withholds payouts until it
 is complete.
 
-### 3. The subscription product
+### 3. The product — a one-off unlock, not a subscription
 
-In Play Console → Monetise → Subscriptions. Two decisions are yours alone:
+In Play Console → Monetise → **In-app products**, as a single
+**non-consumable** item. Not Subscriptions.
 
-- **Period.** A monthly plan and an annual one at a discount is the usual pair.
-  Annual subscribers churn far less; monthly lowers the barrier to trying.
-- **Price.** Play sets local prices per country from your base price, and the
-  app never hard-codes one: `Paywall.js` renders `priceString` exactly as the
-  store reports it, which is both correct and required.
+The reasoning, so it is not undone by accident later: what is sold is photo
+albums and shorts, and both are used AFTER a trip. Most people take one to
+three trips a year. A monthly subscription asks for a recurring payment for
+something used a handful of times — someone subscribes in August, makes their
+album, and cancels in September. A single unlock matches how the thing is
+actually used, converts better at a small price, and removes churn, failed
+renewals and cancellation support entirely.
 
-A free trial or an introductory price is configured here too, not in the app.
+**Price** is the one decision nobody else can make. The app never hard-codes
+one: `Paywall.js` renders `priceString` exactly as the store reports it, which
+is both correct and required. Set a base price and let Play derive the local
+ones — a German buyer should pay what is normal in Germany, not what is normal
+in Romania.
+
+Starting higher is safer than starting low: discounting later is easy, raising
+a price is not.
+
+Nothing in the code assumes a subscription. RevenueCat maps a non-consumable to
+an entitlement exactly as it maps a subscription, so `premium.js` and
+`Paywall.js` work unchanged — only the wording differs, and that is already
+written for a one-off purchase in all 16 languages.
 
 ### 4. RevenueCat
 
@@ -124,34 +139,34 @@ eas build --profile production --platform android
 
 Upload it to **internal testing**, then add your own Google account under
 Play Console → Setup → License testing. Testers see the real purchase flow,
-are charged nothing, and renewals are compressed — a monthly subscription
-renews every few minutes, so a year of behaviour can be watched over lunch.
+are charged nothing.
 
-Test, at minimum: buying, cancelling from the Play subscription centre and
-losing access, resubscribing, and "Restore purchases" on a second device.
+Test, at minimum: buying; that the album and short screens unlock immediately;
+"Restore purchases" on a second device signed into the same Google account;
+and a refund from the Play order history, after which access must go away.
+RevenueCat revokes the entitlement on a refund, so this is worth seeing once.
 
 ### What Play requires of the paywall
 
 Most of this is already true; it is listed so a future change does not quietly
 break compliance.
 
-- The price, the period and the renewal terms must be visible **before** the
-  purchase — the store's own price string satisfies this
+- The price must be visible **before** the purchase — the store's own price
+  string satisfies this, and it is why the app never hard-codes one
 - A way to restore purchases — the button exists, and it is not optional
 - No link out to another payment method for digital goods; Play billing or
   nothing
-- Cancellation is handled by Play, not by the app. Do not build a cancel
-  button; point at the Play subscription centre if anything
+- Refunds are handled by Play, not by the app. Do not build a refund flow
 - The privacy policy and the account-deletion URL from the list above must be
   live before review
 
 ### The web app cannot sell this
 
-Selling the same subscription on the web would need a second payment provider,
-a real account system to attach an entitlement to, and a way to reconcile the
-two — and the app's accounts are local to the device. The web build says the
-subscription is handled in the Android app and stops there, which is honest and
-costs nothing to maintain.
+Selling the same unlock on the web would need a second payment provider, a real
+account system to attach an entitlement to, and a way to reconcile the two —
+and the app's accounts are local to the device. The web build says the unlock
+is bought in the Android app and stops there, which is honest and costs nothing
+to maintain.
 
 If web selling ever matters, the order is: real accounts with a backend first,
 then Stripe, then teach RevenueCat about it. Not before.
@@ -162,5 +177,6 @@ then Stripe, then teach RevenueCat about it. Not before.
   password reset and no sync between phones. This is a consequence of having no
   backend on native, not an oversight — but users will expect otherwise, so the
   sign-in screen should not imply a cloud account.
-- **The web app has no way to subscribe.** Clicking a paid feature there shows
-  "part of the subscription" and stops. Billing exists only through Play.
+- **The web app has no way to buy.** Clicking a paid feature there says the
+  unlock is bought in the Android app and stops. Billing exists only through
+  Play.
