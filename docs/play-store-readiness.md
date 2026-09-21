@@ -47,6 +47,8 @@ for a declaration form — worth avoiding.
       `delete-account.html` exists; it must be publicly linked.
 - [ ] `versionCode` is `1` and `version` is `0.1.0` — fine for the first upload,
       but `versionCode` must increase on **every** subsequent one.
+- [ ] One in-app product, **non-consumable**, priced at **50 RON** in Romania
+      and about €9.99 as the base elsewhere. Not a subscription — see below.
 - [ ] RevenueCat entitlement named exactly `premium`, and its Android key in
       `app.json` → `extra.revenueCatAndroidKey`. Until then `billingConfigured`
       is false and the paywall honestly says billing is unavailable.
@@ -88,11 +90,19 @@ album, and cancels in September. A single unlock matches how the thing is
 actually used, converts better at a small price, and removes churn, failed
 renewals and cancellation support entirely.
 
-**Price** is the one decision nobody else can make. The app never hard-codes
-one: `Paywall.js` renders `priceString` exactly as the store reports it, which
-is both correct and required. Set a base price and let Play derive the local
-ones — a German buyer should pay what is normal in Germany, not what is normal
-in Romania.
+**Price: 50 RON in Romania.** Decided; entered in Play Console, not in code.
+For other markets set a base of about €9.99 and let Play derive local prices —
+a German buyer should pay what is normal in Germany, not the conversion of a
+Romanian price. Play suggests those; they are worth accepting rather than
+hand-tuning.
+
+There is no price anywhere in this repository, and there must not be.
+`Paywall.js` renders `product.priceString` exactly as the store reports it,
+already formatted in the buyer's own currency. That is both the only correct
+way — prices differ by country, tax and time — and a store requirement.
+
+Google takes 15% below $1M of annual revenue, so 50 RON returns roughly 42.5
+RON before tax.
 
 Starting higher is safer than starting low: discounting later is easy, raising
 a price is not.
