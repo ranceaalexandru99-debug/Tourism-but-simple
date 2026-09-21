@@ -22,6 +22,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   DEST_SCHEMA, MODEL, MAX_TOKENS, SYSTEM_PROMPT, buildPrompt, validatePrefs,
 } from "../src/shared/routeSchema.js";
+import { createRateLimiter, DEFAULT_MAX } from "./rateLimit.js";
 
 // Read .env by hand. This is a plain Node process, not a Vite one, so nothing
 // loads it automatically — without this the server started perfectly happily
@@ -101,23 +102,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Crude per-IP rate limit. Without it, a public endpoint backed by a paid API
-// is an open tap on someone else's bill — the exact risk that moving the key
-// server-side was meant to close.
-const WINDOW_MS = 60_000;
-const MAX_PER_WINDOW = Number(process.env.RATE_LIMIT_PER_MIN) || 10;
-const hits = new Map(); // ip → [timestamp, ...]
-function rateLimited(ip) {
-  const now = Date.now();
-  const recent = (hits.get(ip) || []).filter((t) => now - t < WINDOW_MS);
-  recent.push(now);
-  hits.set(ip, recent);
-  // Keep the map from growing without bound on a long-lived process.
-  if (hits.size > 5000) {
-    for (const [k, v] of hits) if (!v.some((t) => now - t < WINDOW_MS)) hits.delete(k);
-  }
-  return recent.length > MAX_PER_WINDOW;
-}
+// Per-IP rate limit — see server/rateLimit.js for why it exists and why it
+// lives in its own module.
+const limiter = createRateLimiter({ max: Number(process.env.RATE_LIMIT_PER_MIN) || DEFAULT_MAX });
+const rateLimited = (ip) => limiter.limited(ip);
 
 // One client for the process. 45s cap because the caller is a user staring at a
 // loading screen (the SDK default is 10 minutes); no retries, because the app
@@ -322,8 +310,19 @@ app.post("/api/generate-route", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[api] listening on http://localhost:${PORT}`);
-  console.log(`[api] AI ${client ? "enabled" : "DISABLED — set ANTHROPIC_API_KEY to enable"}`);
-  if (ALLOWED_ORIGINS.length) console.log(`[api] CORS allowed: ${ALLOWED_ORIGINS.join(", ")}`);
-});
+// Exported so a test can mount the routes without a socket. Importing this
+// module used to start a server, which is why none of it had tests.
+export { app };
+
+// Started only when this file IS the program — `node server/index.js`. Under
+// `import`, argv[1] is the test runner, so nothing listens.
+const isEntrypoint = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isEntrypoint) {
+  app.listen(PORT, () => {
+    console.log(`[api] listening on http://localhost:${PORT}`);
+    console.log(`[api] AI ${client ? "enabled" : "DISABLED — set ANTHROPIC_API_KEY to enable"}`);
+    if (ALLOWED_ORIGINS.length) console.log(`[api] CORS allowed: ${ALLOWED_ORIGINS.join(", ")}`);
+  });
+}
