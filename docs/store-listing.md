@@ -1,0 +1,163 @@
+# Store listing copy
+
+For Google Play. Limits are Play's: app name 30 characters, short description
+80, full description 4000. Counted, not estimated — see the bottom of this
+file for how.
+
+Two languages to start: Romanian (the primary market) and English (Play's
+fallback for everyone else). The app itself speaks sixteen; the listing does
+not have to, and a machine-translated listing reads worse than an English one.
+
+**Nothing here claims anything the app does not do.** Play rejects listings
+that oversell, and a description that promises more than the app delivers
+earns one-star reviews from people who feel misled. Two claims depend on the
+Supabase migration having run — they are marked, and must not ship before it.
+
+---
+
+## Romanian (ro-RO)
+
+### Nume
+```
+Turism, dar simplu!
+```
+
+### Descriere scurtă
+```
+Traseul tău pe zile, cu ore, costuri și sfaturi. Apoi album și clip din poze.
+```
+
+### Descriere lungă
+```
+Spui unde vrei să mergi. Primești un traseu pe zile, cu ore, costuri estimate și sfaturi pentru fiecare oprire.
+
+Fără conturi obligatorii, fără abonament pentru planificare.
+
+PLANIFICARE
+• Scrie liber: „Brașov 3 zile, gastronomie" — atât.
+• Traseu pe zile, cu ore realiste și durata fiecărei opriri
+• Buget estimat pe trei niveluri: econom, echilibrat, premium
+• Ordinea opririlor optimizată, ca să mergi mai puțin pe jos
+• Obiective reale din OpenStreetMap: coordonate, program, categorii
+
+ÎN TIMPUL CĂLĂTORIEI
+• Hartă cu toate opririle și deschidere directă în Google Maps
+• Program, preț și un sfat local pentru fiecare obiectiv
+• Notițe personale la orice oprire — rezervări, mementouri
+• Vremea pentru zilele călătoriei
+• Bifezi ce ai vizitat și dai stele
+
+ÎN GRUP
+• Invită prieteni la aceeași excursie
+• Votați obiectivele împreună
+• Împărțiți cheltuielile, cu soldul calculat automat
+
+AMINTIRI
+• Galerie de poze legate de excursie și de oprire
+• Vezi-ți pozele pe hartă, acolo unde le-ai făcut
+
+EXTRA (deblocare unică, opțională)
+• Album foto ca PDF: fiecare poză așezată sub ziua și locul ei, pe o singură pagină, de tipărit sau trimis
+• Clipuri verticale scurte din pozele excursiei, cu titlu și tranziții
+
+Extra se deblochează printr-o singură plată. Nu e abonament: nu se reînnoiește și nu ai ce anula.
+
+POZELE RĂMÂN LA TINE
+Albumele și clipurile se creează pe telefonul tău. Fotografiile nu se încarcă nicăieri, nu ajung pe niciun server al nostru și nu le putem vedea.
+
+16 LIMBI
+Română, engleză, franceză, spaniolă, italiană, germană, poloneză, rusă, chineză, japoneză, portugheză, neerlandeză, turcă, greacă, ucraineană, coreeană.
+
+FUNCȚIONEAZĂ ȘI FĂRĂ INTERNET
+Traseele salvate se deschid și offline. Poți planifica fără cont și fără să dai nicio informație personală.
+```
+
+---
+
+## English (en-US)
+
+### App name
+```
+Turism, dar simplu!
+```
+
+### Short description
+```
+Your trip, day by day: times, costs, tips. Then an album and a clip from it.
+```
+
+### Full description
+```
+Say where you want to go. Get a day-by-day route with times, estimated costs and a tip for every stop.
+
+No account required, and planning is free.
+
+PLANNING
+• Write it plainly: "Rome 3 days, food and a bit of history"
+• A route per day, with realistic times and how long each stop takes
+• Estimated budget at three levels: budget, balanced, premium
+• Stops reordered so you walk less
+• Real places from OpenStreetMap: coordinates, opening hours, categories
+
+WHILE YOU TRAVEL
+• A map of every stop, and one tap into Google Maps
+• Hours, price and a local tip for each place
+• Your own notes on any stop — bookings, reminders
+• Weather for the days you are travelling
+• Tick off what you have seen, and rate it
+
+TOGETHER
+• Invite friends to the same trip
+• Vote on the stops as a group
+• Split the costs, with the balance worked out for you
+
+WHAT YOU BRING HOME
+• A photo gallery tied to the trip and the stop
+• See your photos on a map, where you took them
+
+EXTRAS (one-off unlock, optional)
+• A photo album as a PDF: every picture filed under the day and place you took it, laid out on a single page to print or send
+• Short vertical clips made from your trip photos, with a title card and transitions
+
+The extras unlock with a single payment. Not a subscription: nothing renews, and there is nothing to cancel.
+
+YOUR PHOTOS STAY YOURS
+Albums and clips are made on your phone. Your photos are never uploaded, never reach a server of ours, and we cannot see them.
+
+16 LANGUAGES
+English, Romanian, French, Spanish, Italian, German, Polish, Russian, Chinese, Japanese, Portuguese, Dutch, Turkish, Greek, Ukrainian, Korean.
+
+WORKS WITHOUT A CONNECTION
+Saved trips open offline. You can plan without an account and without giving us anything about yourself.
+```
+
+---
+
+## Claims that depend on the Supabase migration
+
+Two lines above describe coverage that is not live until
+`scripts/migrate-cities-to-supabase.mjs` has run against a real project:
+
+- "Real places from OpenStreetMap: coordinates, opening hours, categories"
+- the implied breadth of "say where you want to go"
+
+Until then `loadCityPois` returns null for every city and trips fall through to
+a live Overpass fetch — real results, but 5–25 seconds. The claims are true of
+the app as designed and false of the app as currently deployed, so the listing
+must not go live before the migration does.
+
+## What is deliberately NOT claimed
+
+- No "AI-powered". The AI tier is one of four and is off without a key; most
+  routes come from OpenStreetMap data and a local engine. Claiming AI would be
+  selling the thinnest part.
+- No number of cities. It would have to be updated as coverage grows, and a
+  stale number in a store listing is the kind of small lie nobody forgives.
+- No "free" in the short description. Planning is free and the extras are paid;
+  leading with "free" next to an in-app purchase is what gets listings flagged.
+
+## Checking the lengths
+
+```
+node scripts/check-listing.mjs
+```
