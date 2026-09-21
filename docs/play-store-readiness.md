@@ -45,8 +45,11 @@ for a declaration form — worth avoiding.
       `delete-account.html`; they need to be reachable on the deployed site.
 - [ ] Account deletion URL — Play requires it for any app with accounts.
       `delete-account.html` exists; it must be publicly linked.
-- [ ] `versionCode` is `1` and `version` is `0.1.0` — fine for the first upload,
-      but `versionCode` must increase on **every** subsequent one.
+- [ ] `versionCode` is `1` and `version` is `0.1.0` — fine for the first
+      upload. After that `versionCode` is raised by EAS itself
+      (`autoIncrement` on the production profile); `version` is yours to bump,
+      and bumping it cuts existing installs off from over-the-air updates.
+      See `docs/releasing.md`.
 - [ ] One in-app product, **non-consumable**, priced at **50 RON** in Romania
       and about €9.99 as the base elsewhere. Not a subscription — see below.
 - [ ] RevenueCat entitlement named exactly `premium`, and its Android key in

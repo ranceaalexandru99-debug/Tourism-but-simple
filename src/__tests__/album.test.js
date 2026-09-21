@@ -110,3 +110,17 @@ describe("buildAlbum", () => {
     expect(hasEnoughForAlbum(none)).toBe(false);
   });
 });
+
+describe("the shared copies", () => {
+  // album.js and albumHtml.js are copied verbatim to the native app. shortEdit
+  // and shortDraw already had this check; these two did not, which left a
+  // manual diff in the release checklist. A fix landing in one copy and not
+  // the other is this project's most repeated mistake.
+  it.each(["album.js", "albumHtml.js"])("%s is byte-identical to the native one", async (name) => {
+    const fs = await import("node:fs");
+    const web = fs.readFileSync(`src/${name}`, "utf8");
+    const native = fs.readFileSync(`mobile-native/src/lib/${name}`, "utf8");
+    // Line endings are the one thing allowed to differ: git normalises them.
+    expect(native.replace(/\r\n/g, "\n")).toBe(web.replace(/\r\n/g, "\n"));
+  });
+});
