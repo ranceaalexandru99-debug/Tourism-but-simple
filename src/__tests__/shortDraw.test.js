@@ -177,6 +177,39 @@ describe("photoFill", () => {
     DRAW.photoFill(c, img(4000, 2250), 1080, 1920, 1);
     expect(draws(c.calls)).toHaveLength(2);
   });
+
+  it("gives the photo an edge, so it reads as an object on a ground", () => {
+    // Without a shadow the sharp photo and its own blurred backdrop had no
+    // boundary: it looked like a blurry picture with a focused middle, worst
+    // of all on a panorama, where the sharp part is a thin strip.
+    const c = recorder();
+    DRAW.photoFill(c, img(4000, 2250), 1080, 1920, 1);
+    const shadows = c.calls.filter((x) => x[0] === "set:shadowBlur").map((x) => x[1]);
+    expect(shadows.some((v) => v > 0)).toBe(true);
+    // And it is scoped, so the caption drawn afterwards is not shadowed too.
+    expect(c.calls.some((x) => x[0] === "save")).toBe(true);
+    expect(c.calls.some((x) => x[0] === "restore")).toBe(true);
+  });
+
+  it("lifts a landscape photo off dead centre, clearing the caption band", () => {
+    const W = 1080, H = 1920;
+    const c = recorder();
+    DRAW.photoFill(c, img(4000, 2250), W, H, 1);
+    const [, , , y, , h] = draws(c.calls).at(-1);
+    const centred = (H - h) / 2;
+    expect(y).toBeLessThan(centred);      // raised
+    expect(y).toBeGreaterThanOrEqual(0);  // but still inside the frame
+  });
+
+  it("does not move a photo that already fills the height", () => {
+    // A 9:16 photo in a 9:16 frame has no gap to lift into, and nudging it
+    // would push its top out of frame.
+    const W = 720, H = 1280;
+    const c = recorder();
+    DRAW.photoFill(c, img(720, 1280), W, H, 1);
+    const [, , , y] = draws(c.calls).at(-1);
+    expect(y).toBeCloseTo(0, 5);
+  });
 });
 
 describe("palette", () => {

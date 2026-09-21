@@ -60,12 +60,19 @@ export const DRAW = {
     ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
   },
 
-  // The whole photo inside the frame, centred, nothing cropped.
-  contain(ctx, img, W, H, zoom) {
+  // The whole photo inside the frame, nothing cropped.
+  //
+  // `lift` (0..1) raises it by that fraction of the gap above it. Dead centre
+  // leaves a wide band of empty blur between a landscape photo and the caption
+  // below it; lifting balances the composition. It is a fraction of the gap
+  // rather than a fixed distance on purpose: a portrait photo that already
+  // fills the height has no gap, so it does not move at all.
+  contain(ctx, img, W, H, zoom, lift = 0) {
     const scale = Math.min(W / img.width, H / img.height) * zoom;
     const w = img.width * scale;
     const h = img.height * scale;
-    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+    const gap = Math.max(0, (H - h) / 2);
+    ctx.drawImage(img, (W - w) / 2, gap - gap * lift, w, h);
   },
 
   // A photo filling a 1080×1920 frame, without losing any of it.
@@ -77,18 +84,35 @@ export const DRAW = {
   // Nothing is cropped, the frame is never empty, and the drift stays on the
   // sharp copy where it reads.
   photoFill(ctx, img, W, H, zoom) {
+    const S = H / 1920;
+
     // ctx.filter is Chromium-only in practice, which is exactly where both
     // encoders run — the browser canvas and the Android WebView. Where it is
-    // missing the backdrop simply draws sharp, which is still a filled frame
-    // rather than a broken one.
-    const supported = typeof ctx.filter === "string";
-    if (supported) ctx.filter = "blur(" + Math.round(H / 48) + "px)";
-    DRAW.cover(ctx, img, W, H, 1.18);
-    if (supported) ctx.filter = "none";
-    // Darkened so the sharp photo separates from its own blurred backdrop.
-    ctx.fillStyle = "rgba(10,22,40,0.34)";
+    // missing the backdrop draws sharp but still darkened, which is a filled
+    // frame rather than a broken one.
+    const blurs = typeof ctx.filter === "string";
+    if (blurs) ctx.filter = "blur(" + Math.round(H / 40) + "px) saturate(0.55)";
+    DRAW.cover(ctx, img, W, H, 1.22);
+    if (blurs) ctx.filter = "none";
+
+    // Pushed well back. At a third this read as "a blurry photo with a sharp
+    // middle" rather than as a photograph on a ground: the eye had no edge to
+    // catch, worst of all on a panorama, where the sharp part is a thin strip
+    // in a sea of its own blur.
+    ctx.fillStyle = "rgba(8,16,30,0.58)";
     ctx.fillRect(0, 0, W, H);
-    DRAW.contain(ctx, img, W, H, zoom);
+
+    // And an edge to catch. A shadow is what makes the photo read as an object
+    // sitting in front of the ground rather than as the one part of it that
+    // happens to be in focus.
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.55)";
+    ctx.shadowBlur = 44 * S;
+    ctx.shadowOffsetY = 10 * S;
+    // Lifted a third of the way, which clears the caption band without
+    // crowding the top.
+    DRAW.contain(ctx, img, W, H, zoom, 0.34);
+    ctx.restore();
   },
 
   // Title and outro cards. Fades in over the first third, holds, fades out over
