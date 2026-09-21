@@ -6,106 +6,62 @@
 // The WebView is 1×1 and behind everything rather than `display: none`: a hidden
 // WebView is treated as a background tab, requestAnimationFrame stops, and the
 // render never advances. It has to be technically on screen to run.
+//
+// Everything that decides anything — the chunk bookkeeping, the watchdog, the
+// sanitising of values that arrive in a message — lives in shortCollector.js,
+// where it can be tested. What is left here is the WebView and the file write.
 
 import { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
 import * as FileSystem from "expo-file-system";
 import { buildShortRenderHtml } from "../lib/shortRenderHtml.js";
+import { createShortCollector } from "../lib/shortCollector.js";
 
 export default function ShortRenderer({ payload, onProgress, onDone, onError }) {
   const [html] = useState(() => buildShortRenderHtml(payload));
-  // Chunks arrive in order but are indexed anyway, so a dropped message is
-  // detectable instead of producing a silently corrupt file.
-  const parts = useRef([]);
-  const meta = useRef(null);
-  const settled = useRef(false);
 
-  // Watchdog for a WebView that goes silent.
-  //
-  // Every way the render can die without saying so ends here: a MediaRecorder
-  // that never fires onstop, the OS reclaiming the WebView, the JS engine
-  // throwing somewhere the page's own try cannot see. WebView's onError only
-  // covers loading the page, so none of those reached us and the user sat on a
-  // progress bar that would never move again.
-  //
-  // A fixed deadline would be wrong — a twelve-photo render legitimately takes
-  // a while. What is never legitimate is SILENCE: the page reports progress
-  // continuously, so the timer resets on every message and only fires when
-  // nothing has arrived at all.
-  const STALL_MS = 45000;
-  const watchdog = useRef(null);
-  const stopWatchdog = () => { if (watchdog.current) { clearTimeout(watchdog.current); watchdog.current = null; } };
-  const kickWatchdog = () => {
-    stopWatchdog();
-    watchdog.current = setTimeout(() => {
-      if (settled.current) return;
-      settled.current = true;
-      onError?.("stalled");
-    }, STALL_MS);
-  };
+  // Handlers are read through a ref so the collector, built once, always calls
+  // the current ones — rebuilding it on every render would restart the
+  // watchdog and lose the chunks collected so far.
+  const handlers = useRef({ onProgress, onDone, onError });
+  handlers.current = { onProgress, onDone, onError };
+
+  const collector = useRef(null);
+  if (!collector.current) {
+    collector.current = createShortCollector({
+      onProgress: (v) => handlers.current.onProgress?.(v),
+      onDone: (uri, ext) => handlers.current.onDone?.(uri, ext),
+      onError: (reason) => handlers.current.onError?.(reason),
+      write: async (base64, ext) => {
+        const dir = FileSystem.cacheDirectory + "shorts/";
+        await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+        const uri = `${dir}short-${Date.now()}.${ext}`;
+        await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+        return uri;
+      },
+    });
+  }
 
   useEffect(() => {
-    kickWatchdog();
-    return () => { settled.current = true; stopWatchdog(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const c = collector.current;
+    c.start();
+    // Unmounting IS the cancel: silently, because the user asked for it.
+    return () => c.cancel();
   }, []);
-
-  const finish = async () => {
-    if (settled.current) return;
-    const { parts: n, mime } = meta.current || {};
-    const missing = [];
-    for (let i = 0; i < n; i++) if (typeof parts.current[i] !== "string") missing.push(i);
-    if (missing.length) { settled.current = true; onError?.("incomplete"); return; }
-
-    // `mime` arrives in a message from the WebView and used to be interpolated
-    // straight into a file path. The page is ours, but everything it renders is
-    // not — captions come from the user — so treating its messages as trusted
-    // input was a step too far: a value like "mp4/../../x" would have written
-    // outside the shorts directory. Only these two are ever legitimate.
-    const ext = mime === "mp4" || mime === "webm" ? mime : "mp4";
-
-    try {
-      const base64 = parts.current.join("");
-      const dir = FileSystem.cacheDirectory + "shorts/";
-      await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
-      const uri = `${dir}short-${Date.now()}.${ext}`;
-      await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
-      settled.current = true;
-      onDone?.(uri, ext);
-    } catch (e) {
-      settled.current = true;
-      onError?.(String(e?.message || e));
-    }
-  };
-
-  const onMessage = (event) => {
-    if (settled.current) return;
-    let msg;
-    try { msg = JSON.parse(event.nativeEvent.data); } catch { return; }
-    kickWatchdog();   // it is alive; start the silence clock over
-    switch (msg.type) {
-      case "progress": onProgress?.(msg.value); break;
-      case "begin": meta.current = msg; parts.current = new Array(msg.parts); break;
-      case "chunk": parts.current[msg.i] = msg.data; break;
-      case "done": stopWatchdog(); finish(); break;
-      case "error": stopWatchdog(); settled.current = true; onError?.(msg.reason); break;
-      default: break;
-    }
-  };
 
   return (
     <View style={{ position: "absolute", width: 1, height: 1, opacity: 0, zIndex: -1 }} pointerEvents="none">
       <WebView
         source={{ html }}
         originWhitelist={["*"]}
-        onMessage={onMessage}
+        onMessage={(event) => collector.current.handleMessage(event.nativeEvent.data)}
         // The page is self-contained; nothing else may load.
         javaScriptEnabled
         domStorageEnabled={false}
         allowFileAccess={false}
         mediaPlaybackRequiresUserAction={false}
-        onError={() => { if (!settled.current) { settled.current = true; stopWatchdog(); onError?.("webview"); } }}
+        onError={() => collector.current.cancel("webview")}
         style={{ width: 1, height: 1, backgroundColor: "transparent" }}
       />
     </View>
