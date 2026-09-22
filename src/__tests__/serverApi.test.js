@@ -15,8 +15,15 @@ beforeAll(async () => {
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.SUPABASE_URL;
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-  process.env.RATE_LIMIT_PER_MIN = "3";
+  // High, so one test's requests do not starve the next. The limiter itself is
+  // covered thoroughly in serverRateLimit.test.js; the test at the end of this
+  // file only proves the /api/errors route is wired to it.
+  process.env.RATE_LIMIT_PER_MIN = "100";
   delete process.env.TRUST_PROXY;
+  // Its own log file, so a test run never touches the real one.
+  const os = await import("node:os");
+  const p = await import("node:path");
+  process.env.ERROR_LOG = p.join(os.tmpdir(), `vai-errors-test-${Date.now()}.jsonl`);
 
   const { app } = await import("../../server/index.js");
   server = http.createServer(app);
@@ -127,6 +134,70 @@ describe("POST /api/contribute-pois", () => {
   it("refuses without admin credentials", async () => {
     const res = await post("/api/contribute-pois", { cityId: "Q90", pois: [] });
     expect([503, 429]).toContain(res.status);
+  });
+});
+
+describe("POST /api/errors", () => {
+  // Where a crashed app reports to. Without it, an error in a published build
+  // is invisible and the author finds out from a one-star review.
+  const readLog = async () => {
+    const fs = await import("node:fs");
+    if (!fs.existsSync(process.env.ERROR_LOG)) return [];
+    return fs.readFileSync(process.env.ERROR_LOG, "utf8")
+      .split("\n").filter(Boolean).map((l) => JSON.parse(l));
+  };
+
+  it("accepts a report and writes it down", async () => {
+    const res = await post("/api/errors", {
+      kind: "fatal", message: "boom", stack: "at f (x.js:1:1)",
+      platform: "android 34", appVersion: "0.1.0", ts: "2026-09-22T10:00:00.000Z",
+    });
+    expect(res.status).toBe(204);
+    const lines = await readLog();
+    const mine = lines.find((l) => l.message === "boom");
+    expect(mine).toBeTruthy();
+    expect(mine.kind).toBe("fatal");
+    expect(mine.appVersion).toBe("0.1.0");
+    expect(mine.receivedAt).toBeTruthy();     // the server's own clock, not the app's
+  });
+
+  it("caps every field, because the sender has just crashed", async () => {
+    const res = await post("/api/errors", {
+      kind: "x".repeat(200), message: "m".repeat(5000), stack: "s".repeat(9000),
+      platform: "p".repeat(500),
+    });
+    expect(res.status).toBe(204);
+    const last = (await readLog()).at(-1);
+    expect(last.message.length).toBeLessThanOrEqual(500);
+    expect(last.stack.length).toBeLessThanOrEqual(2000);
+    expect(last.kind.length).toBeLessThanOrEqual(40);
+    expect(last.platform.length).toBeLessThanOrEqual(60);
+  });
+
+  it("refuses a report with nothing in it", async () => {
+    expect((await post("/api/errors", {})).status).toBe(400);
+    expect((await post("/api/errors", { kind: "fatal" })).status).toBe(400);
+  });
+
+  it("refuses something that is not an object", async () => {
+    expect((await post("/api/errors", ["not", "an", "object"])).status).toBe(400);
+  });
+
+  it("keeps only the fields it knows, dropping anything else sent", async () => {
+    await post("/api/errors", { message: "keeps", evil: "<script>", nested: { a: 1 } });
+    const last = (await readLog()).at(-1);
+    expect(last.message).toBe("keeps");
+    expect("evil" in last).toBe(false);
+    expect("nested" in last).toBe(false);
+  });
+
+  it("is rate limited, so an error loop cannot fill the disk", async () => {
+    let sawLimit = false;
+    for (let i = 0; i < 140 && !sawLimit; i++) {
+      const res = await post("/api/errors", { message: "loop" });
+      if (res.status === 429) sawLimit = true;
+    }
+    expect(sawLimit).toBe(true);
   });
 });
 

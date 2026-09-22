@@ -18,7 +18,7 @@ Justification, per data type Google asks about:
 | Name, email address | No | Accounts are **local only**. `signUp()` in `mobile-native/src/lib/auth.js` salts and hashes the password with `expo-crypto` and stores it on the device. Nothing is transmitted, and there is no server that could receive it. |
 | Photos | No | Stored in the app's document directory (`mobile-native/src/lib/gallery.js`). Albums and shorts are rendered **on the device** — `expo-print` for the PDF, a WebView + MediaRecorder for the video. This is why server-side rendering was rejected: the privacy policy promises it three times. |
 | Location | No | No `expo-location`, no permission requested. The weather call sends the **destination's** coordinates (`weather.js`), which the user typed — not the device's position. |
-| Crash logs / diagnostics | No | `ERROR_ENDPOINT` in `mobile-native/src/lib/monitor.js` is the empty string, so nothing is POSTed. Setting it would change this answer to Yes. |
+| Crash logs / diagnostics | **Depends — see below** | `extra.errorEndpoint` in `app.json` is the empty string, so nothing is sent and the answer is No. Filling it in changes the answer to **Yes**, and the form must be updated before that build is uploaded. |
 | Purchase history | Shared by the store | RevenueCat/Google Play handle the receipt. Declare per RevenueCat's own guidance once billing is enabled. |
 
 **Hosts contacted** (all read-only public APIs, no user data in the request):
@@ -28,6 +28,33 @@ Justification, per data type Google asks about:
 - `api.open-meteo.com` — forecast for the destination's coordinates
 - `turism-dar-simplu.netlify.app` — the app's own pre-generated POI files
 - `www.google.com` — only when the user taps "open in Maps"; this is an outbound link, not a request the app makes
+
+### If you turn error reporting on
+
+`app.json` → `extra.errorEndpoint`, pointing at the deployed server's
+`/api/errors`. It is off by default, and while it is off the Data Safety answer
+above stays No.
+
+Turning it on means declaring, in the same form:
+
+- **Crash logs** — collected, not shared, and required for the app to function?
+  No — say **optional**, because the app works with it off.
+- **Diagnostics** — same.
+
+And it means the privacy wording about it matters. Note which file: the in-app
+sheet and the public pages are both generated from **`src/legal.js`** by
+`npm run legal`. `legal/PRIVACY.md` is a longer reference document and is NOT
+the source of what users read — editing only that one changes nothing they see.
+
+What is actually sent: the error message, a stack trace, the platform, the app
+version and a timestamp. Before it leaves the device it passes through
+`errorScrub.js`, which removes inline photo data, email addresses, file paths
+and tokens. That reduces exposure; it does not anonymise a stack trace, and
+neither the policy nor this document claims it does.
+
+The alternative is Sentry (`mobile-native/SENTRY.md`), which needs no server of
+yours but makes Sentry a data processor you must name in the policy and in the
+Data Safety form.
 
 ## Permissions
 

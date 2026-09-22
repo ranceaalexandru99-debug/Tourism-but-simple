@@ -13,10 +13,20 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import Constants from "expo-constants";
+import { scrubReport } from "./errorScrub.js";
 
-// Remote sink (optional). Leave "" to keep everything on-device. When the
-// error-proxy Worker exists, point this at its /errors route.
-const ERROR_ENDPOINT = "";
+// Remote sink, optional and OFF by default.
+//
+// It used to be a constant hard-coded to "", so turning reporting on meant
+// editing a source file and rebuilding — while the web app read the same
+// setting from its environment. Now it comes from app.json →
+// extra.errorEndpoint, which is one value and no code change.
+//
+// Point it at the /api/errors route of the deployed server. Empty means every
+// error stays on the device, which is a supported state, not a broken one.
+const ERROR_ENDPOINT = Constants.expoConfig?.extra?.errorEndpoint || "";
+const APP_VERSION = Constants.expoConfig?.version || "";
 
 const BUFFER_KEY = "vai_errors";
 const BUFFER_MAX = 20;
@@ -42,18 +52,25 @@ export function report(kind, message, stack, extra) {
     message: String(message || "").slice(0, 500),
     stack: String(stack || "").slice(0, 2000),
     platform: `${Platform.OS} ${Platform.Version}`,
+    appVersion: APP_VERSION,
     ts: new Date().toISOString(),
     ...(extra || {}),
   };
+  // The on-device buffer keeps the unscrubbed text: it never leaves the phone,
+  // and whoever reads it is the person the data belongs to.
   bufferPush(entry);
   try { externalReporter && externalReporter(entry); } catch {}
   if (!ERROR_ENDPOINT || sent >= MAX_REMOTE_REPORTS) return;
   sent++;
+  // Anything that goes OFF the device is scrubbed first. An error message is
+  // built by whatever threw, and what threw was often handed a photo caption,
+  // a typed destination, or a file path with someone's name in it.
+  const safe = scrubReport(entry);
   try {
     fetch(ERROR_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(entry),
+      body: JSON.stringify(safe),
     }).catch(() => {});
   } catch { /* never let reporting itself throw */ }
 }

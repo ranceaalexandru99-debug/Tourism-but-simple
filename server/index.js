@@ -114,6 +114,54 @@ const client = API_KEY
   ? new Anthropic({ apiKey: API_KEY, timeout: 45_000, maxRetries: 0 })
   : null;
 
+// Somewhere for a crashed app to report to.
+//
+// Without this, an error in a published build is invisible: the phone keeps a
+// ring buffer nobody can read, and the author learns about the bug from a
+// one-star review weeks later. The alternative is Sentry (see
+// mobile-native/SENTRY.md), which needs no server but hands the reports to a
+// third party; this keeps them here.
+//
+// Reports arrive from an app that has just failed, so nothing in them is
+// trusted: the shape is checked, every field is size-capped, and the whole
+// thing is rate-limited like any other public endpoint.
+const ERROR_LOG = process.env.ERROR_LOG || path.join(
+  path.dirname(path.dirname(fileURLToPath(import.meta.url))), "data", "errors.jsonl",
+);
+
+app.post("/api/errors", (req, res) => {
+  if (rateLimited(req.ip)) {
+    return res.status(429).json({ error: "rate_limited", message: "Too many reports." });
+  }
+
+  const b = req.body || {};
+  if (typeof b !== "object" || Array.isArray(b)) return res.status(400).json({ error: "bad_request" });
+  const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+  const entry = {
+    kind: str(b.kind, 40) || "error",
+    message: str(b.message, 500),
+    stack: str(b.stack, 2000),
+    platform: str(b.platform, 60),
+    appVersion: str(b.appVersion, 40),
+    ts: str(b.ts, 40) || new Date().toISOString(),
+    receivedAt: new Date().toISOString(),
+  };
+  if (!entry.message && !entry.stack) return res.status(400).json({ error: "bad_request" });
+
+  // One JSON object per line: appendable without reading, greppable, and it
+  // cannot be corrupted by two writes racing the way a JSON array would be.
+  try {
+    fs.mkdirSync(path.dirname(ERROR_LOG), { recursive: true });
+    fs.appendFileSync(ERROR_LOG, JSON.stringify(entry) + "\n");
+  } catch (err) {
+    console.error("[api] could not write the error log:", err.message);
+  }
+  console.error(`[app-error] ${entry.kind} ${entry.platform} ${entry.appVersion}: ${entry.message}`);
+
+  // 204: the app is already in trouble and has nothing to do with a body.
+  return res.sendStatus(204);
+});
+
 app.get("/api/health", (_req, res) =>
   res.json({ ok: true, ai: Boolean(client), accountDeletion: Boolean(admin) }));
 

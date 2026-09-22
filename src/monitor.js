@@ -2,11 +2,21 @@
 //
 // OFF unless VITE_ERROR_ENDPOINT is set at build time. When enabled, uncaught
 // errors and unhandled promise rejections are POSTed (sendBeacon, best-effort)
-// as small JSON payloads: message, stack, url, user-agent, timestamp. No IDs,
-// no cookies, nothing user-typed. If you enable this for a public deployment,
-// disclose it in the Privacy Policy (see legal/PRIVACY.md §4).
+// as small JSON payloads: message, stack, url, user-agent, timestamp. No IDs
+// and no cookies.
+//
+// "Nothing user-typed" is what this comment used to claim, and it was not
+// true: a message is built by whatever threw, and what threw was often handed
+// a caption or a typed destination. Everything leaving the page now goes
+// through errorScrub.js first. That removes the predictable categories — inline
+// photos, addresses, paths, tokens — which is not the same as anonymising it.
+//
+// If you enable this for a public deployment, disclose it in the Privacy
+// Policy (see legal/PRIVACY.md §4).
 //
 // Rate-limited so an error loop can't spam the endpoint from one session.
+
+import { scrubReport } from "./errorScrub.js";
 
 const ENDPOINT = import.meta.env.VITE_ERROR_ENDPOINT || "";
 const MAX_REPORTS = 10;
@@ -34,10 +44,12 @@ export function report(kind, message, stack) {
     ts: new Date().toISOString(),
     v: import.meta.env.VITE_APP_VERSION || "dev",
   };
+  // The buffer keeps the unscrubbed text: it stays in this browser, and
+  // whoever reads it is the person the data belongs to.
   bufferPush(entry);
   if (!ENDPOINT || sent >= MAX_REPORTS) return;
   sent++;
-  const payload = JSON.stringify(entry);
+  const payload = JSON.stringify(scrubReport(entry));
   try {
     if (navigator.sendBeacon) {
       navigator.sendBeacon(ENDPOINT, new Blob([payload], { type: "application/json" }));

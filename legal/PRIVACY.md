@@ -80,11 +80,28 @@ analytics such as Plausible/Umami/GA, disclose it here and update the cookie
 section.]**
 
 **[Optional — delete if unused:** the app ships with a built-in error reporter
-that is **disabled by default**. If the operator enables it (build-time
-`VITE_ERROR_ENDPOINT`), uncaught technical errors are sent to that endpoint as
-small JSON payloads: error message, stack trace, page path (never the trip data
-in the URL hash), browser user-agent and timestamp — no identifiers, no cookies,
-nothing you typed. Name the endpoint provider here and its retention period.**]**
+that is **disabled by default**, on the website (build-time
+`VITE_ERROR_ENDPOINT`) and in the Android app (`extra.errorEndpoint`). While it
+is disabled, errors are kept only on your own device, in a buffer of the last
+twenty, and are sent nowhere.
+
+If the operator enables it, uncaught technical errors are sent to that endpoint
+as small JSON payloads: error message, stack trace, page path (never the trip
+data in the URL hash), platform or browser, app version and timestamp. No
+identifiers and no cookies.
+
+Before anything leaves your device it is passed through a filter that removes
+the categories we can predict: inline photo data, email addresses, file paths,
+access tokens and long identifiers. We do this because an error message is
+assembled by whatever failed, and that may have been holding something you
+typed. **This reduces what is exposed; it does not make a report anonymous,
+and we do not claim that it does.** A stack trace may still contain fragments
+of text from the screen you were on.
+
+At most ten reports are sent per session, so a repeating fault cannot turn into
+a stream of data.
+
+Name the endpoint provider here and its retention period.**]**
 
 ## 5. International data transfers
 

@@ -61,7 +61,7 @@
 <h3>Purchases</h3>
 <p>Subscriptions are sold and processed by Google Play or the Apple App Store. They are the ones handling your payment method and billing record; we never receive your card number or billing address. To know whether to unlock paid features, the app asks the store whether your purchase is active — that check involves a purchase identifier issued by the store, not your identity. We do not build a profile from it and it is not linked to your trips.</p>
 <h3>Crash reports</h3>
-<p>The app keeps a small log of its own errors on your device so problems can be diagnosed. If a build is configured with a crash-reporting endpoint, technical error details (message, stack trace, app version, device type) may be sent — never trip content or anything you typed.</p>
+<p>The app keeps a small log of its own errors on your device — the last twenty — so problems can be diagnosed. Nothing is sent anywhere unless a build is configured with a reporting endpoint; by default none is. When one is, technical details may be sent: message, stack trace, app version, device type. Before anything leaves your device it is filtered to strip photo data, email addresses, file paths and tokens. That reduces what is exposed, but a stack trace can still contain fragments of text from the screen you were on, so we do not promise it is anonymous. At most ten reports are sent per session.</p>
 <h3>Children</h3>
 <p>The app is not directed at children under 16 and we do not knowingly collect data from them. Since no data reaches us at all, there is nothing for us to collect.</p>
 <h3>Your rights (GDPR)</h3>
@@ -96,7 +96,7 @@
 <h3>Cumpărături</h3>
 <p>Abonamentele sunt vândute și procesate de Google Play sau Apple App Store. Ei sunt cei care îți gestionează metoda de plată și istoricul de facturare; noi nu primim niciodată numărul cardului sau adresa de facturare. Ca să știe dacă deblochează funcțiile plătite, aplicația întreabă magazinul dacă achiziția ta e activă — verificarea folosește un identificator de achiziție emis de magazin, nu identitatea ta. Nu construim niciun profil din el și nu e legat de traseele tale.</p>
 <h3>Rapoartele de eroare</h3>
-<p>Aplicația păstrează pe dispozitiv un jurnal mic cu propriile erori, ca problemele să poată fi diagnosticate. Dacă o versiune e configurată cu un serviciu de raportare, pot fi trimise detalii tehnice (mesaj, stivă de apel, versiunea aplicației, tipul dispozitivului) — niciodată conținutul traseelor sau ce ai scris tu.</p>
+<p>Aplicația păstrează pe dispozitiv un jurnal mic cu propriile erori — ultimele douăzeci — ca problemele să poată fi diagnosticate. Nu se trimite nimic nicăieri decât dacă o versiune e configurată cu un serviciu de raportare; implicit nu e. Când e, pot fi trimise detalii tehnice: mesaj, stivă de apel, versiunea aplicației, tipul dispozitivului. Înainte să plece ceva de pe dispozitivul tău, textul e filtrat pentru a elimina datele de poze, adresele de email, căile de fișiere și jetoanele de acces. Asta reduce ce se expune, dar o stivă de apel poate conține în continuare fragmente din ecranul pe care erai, așa că nu îți promitem că e anonimă. Se trimit cel mult zece rapoarte pe sesiune.</p>
 <h3>Copii</h3>
 <p>Aplicația nu se adresează copiilor sub 16 ani și nu colectăm cu bună știință date de la ei. Cum nu ajunge niciun fel de date la noi, nu avem ce colecta.</p>
 <h3>Drepturile tale (GDPR)</h3>
