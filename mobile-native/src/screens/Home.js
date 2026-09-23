@@ -5,7 +5,7 @@ import { useI18n, tripTitle } from "../lib/i18n.js";
 import { POPULAR } from "../lib/mockEngine.js";
 import { FONT } from "../fonts.js";
 import { Label } from "../components/ui.js";
-import { Search, MapPin, Clock, CategoryIcon } from "../icons.js";
+import { Search, MapPin, Clock, CategoryIcon, Map } from "../icons.js";
 import PoiImage from "../components/PoiImage.js";
 import { countryName } from "../lib/countryNames.js";
 import { LinearGradient } from "expo-linear-gradient";
@@ -33,7 +33,7 @@ function shuffle(arr) {
   return out;
 }
 
-export default function Home({ user, saved, onSearch, onQuick, onOpenSaved }) {
+export default function Home({ user, saved, onSearch, onQuick, onOpenSaved, onExplore }) {
   const { t, lang } = useI18n();
   const name = user?.name || t("traveler");
   // Stable for the lifetime of this Home instance so tiles don't reshuffle
@@ -50,6 +50,13 @@ export default function Home({ user, saved, onSearch, onQuick, onOpenSaved }) {
       <Pressable onPress={onSearch} style={styles.search}>
         <View style={styles.searchIcon}><Search size={18} color={C.bg} strokeWidth={2.4} /></View>
         <Text style={{ color: C.muted, fontSize: 16 }}>{t("where")}</Text>
+      </Pressable>
+
+      {/* The other way to start: for anyone who does not already know where
+          they want to go, which is most of the reason this screen exists. */}
+      <Pressable onPress={onExplore} style={styles.explore}>
+        <Map size={17} color={C.gold} />
+        <Text style={styles.exploreTxt}>{t("exploreCta")}</Text>
       </Pressable>
 
       <Label color={C.gold}>{t("popular")}</Label>
@@ -115,8 +122,14 @@ const styles = themedStyles(() => StyleSheet.create({
   search: {
     flexDirection: "row", alignItems: "center", gap: 12,
     backgroundColor: C.card, borderWidth: 1, borderColor: C.gold + "45", borderRadius: 18,
-    padding: 13, marginBottom: 28,
+    padding: 13, marginBottom: 10,
   },
+  explore: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14,
+    paddingVertical: 12, marginBottom: 28,
+  },
+  exploreTxt: { color: C.gold, fontFamily: FONT.semibold, fontSize: 15 },
   searchIcon: {
     width: 38, height: 38, borderRadius: 12, backgroundColor: C.gold,
     alignItems: "center", justifyContent: "center",

@@ -39,6 +39,7 @@ PLANIFICARE
 • Buget estimat pe trei niveluri: econom, echilibrat, premium
 • Ordinea opririlor optimizată, când chiar ai de câștigat
 • Obiective reale din OpenStreetMap: coordonate, program, categorii
+• Nu știi unde? Plimbă harta și descoperă orașe din toată lumea
 
 ÎN TIMPUL CĂLĂTORIEI
 • Hartă cu toate opririle și deschidere directă în Google Maps
@@ -94,6 +95,7 @@ PLANNING
 • Estimated budget at three levels: budget, balanced, premium
 • Stops reordered when that actually saves you a walk
 • Real places from OpenStreetMap: coordinates, opening hours, categories
+• Not sure where? Pan the map and discover cities anywhere in the world
 
 WHILE YOU TRAVEL
 • A map of every stop, and one tap into Google Maps
@@ -191,7 +193,7 @@ a feature set. Anything written above must be true of `mobile-native/`.
 | Weather for the trip dates | yes | yes |
 | Route optimisation | yes | yes |
 | Photos on a map | yes | yes |
-| **Explore map** (pan to discover cities) | yes | **no** |
+| Explore map (pan to discover cities) | yes* | yes |
 
 How to check a claim before writing it: the feature has to be reachable from a
 screen in `mobile-native/src/screens/`. A module existing in
@@ -218,6 +220,21 @@ Until then `loadCityPois` returns null for every city and trips fall through to
 a live Overpass fetch — real results, but 5–25 seconds. The claims are true of
 the app as designed and false of the app as currently deployed, so the listing
 must not go live before the migration does.
+
+The Explore map is the sharp case of this, and the matrix row above is starred
+for it. On **Android it works today**: the 5000-city index ships inside the
+bundle, so panning filters memory — no network, no latency, nothing that can be
+unreachable. On the **web it is dark until Supabase exists** (hence the star),
+because there the same screen is a bounding-box query. The two run the same
+rules — `src/shared/cityBounds.js`, shared byte-for-byte — over different
+sources. So an Explore claim is safe for the Play listing and premature for the
+web one.
+
+**It is still not an offline feature, and the bullet must not say so.** The
+city list is on the device; the map TILES are not. With no connection you get
+gold dots on a blank ground — the cities are all there and tappable, but nobody
+would call that a working map. The offline claim elsewhere in the listing is
+about saved trips, which genuinely need nothing.
 
 ## What is deliberately NOT claimed
 

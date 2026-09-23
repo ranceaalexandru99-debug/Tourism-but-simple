@@ -7,6 +7,7 @@
 // must work with no network.
 
 import DATA from "../data/destinations.json";
+import { selectCitiesInBounds } from "../shared/cityBounds.js";
 
 const normalize = (s) => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
@@ -97,4 +98,19 @@ export function getHiddenGems(n = 6) {
 }
 export function getEuropeWeekend(n = 6) {
   return shuffle(DATA.filter((d) => d.co === "EU" && (d.t === "mega" || d.t === "major"))).slice(0, n);
+}
+
+// ---- map exploration -------------------------------------------------------
+// Cities inside the visible rectangle, most recognisable first.
+//
+// The web app asks Supabase for this. Here the whole index is already in
+// memory, so it is a filter: no network, no latency, and — unlike the web —
+// nothing that can be unreachable. The rules for what a viewport contains and
+// what is worth drawing at a given zoom come from a module shared byte-for-byte
+// with the web app, so the same pan shows the same cities on both.
+//
+// Async only for signature parity with the web module, so a screen written
+// against one works against the other.
+export async function getCitiesInBounds(bounds, opts) {
+  return selectCitiesInBounds(DATA, bounds, opts);
 }

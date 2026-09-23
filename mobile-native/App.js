@@ -27,6 +27,7 @@ import Preferences from "./src/screens/Preferences.js";
 import Loading from "./src/screens/Loading.js";
 import Route from "./src/screens/Route.js";
 import Gallery from "./src/screens/Gallery.js";
+import Explore from "./src/screens/Explore.js";
 import BottomNav from "./src/components/BottomNav.js";
 import ConsentBanner from "./src/components/ConsentBanner.js";
 import { currentUser, clearSession } from "./src/lib/auth.js";
@@ -95,7 +96,7 @@ function Root() {
   const showTabs = TABS.includes(screen);
   // Full-bleed screens (cover art / centered logos) go edge-to-edge; content
   // screens are inset away from the system UI.
-  const fullBleed = screen === "route" || screen === "splash" || screen === "loading";
+  const fullBleed = screen === "route" || screen === "splash" || screen === "loading" || screen === "explore";
   // Real insets on both platforms. This used to be React Native's own
   // SafeAreaView plus a hand-rolled Android status-bar offset — but that
   // SafeAreaView is iOS-only (a no-op on Android), and nothing accounted for
@@ -124,7 +125,11 @@ function Root() {
             onSearch={() => { setQuery(""); go("input"); }}
             onQuick={(q) => { setQuery(q); go("input"); }}
             onOpenSaved={openSaved}
+            onExplore={() => go("explore")}
           />
+        )}
+        {screen === "explore" && (
+          <Explore onQuick={(q) => { setQuery(q); go("input"); }} onClose={() => go("home")} />
         )}
         {screen === "trips" && <Trips saved={saved} onOpen={openSaved} onDelete={deleteRoute} onRestore={saveRoute} />}
         {screen === "gallery" && <Gallery saved={saved} />}

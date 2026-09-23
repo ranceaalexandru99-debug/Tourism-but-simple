@@ -14,6 +14,7 @@
 // getHiddenGems / getEuropeWeekend were already async, and nameMatchesCity
 // stays a synchronous pure function.
 
+import { lonRanges, tiersForZoom, usableBounds } from "./shared/cityBounds.js";
 import { supabase } from "./lib/supabaseClient.js";
 
 // Must match migrate-cities-to-supabase.mjs, which writes cities.name_norm with
@@ -221,32 +222,12 @@ export async function getEuropeWeekend(n = 6) {
 
 // ---- map exploration -------------------------------------------------------
 
-// Which tiers are worth drawing at a given zoom. Rendering all 5000 cities at
-// world zoom would be both unreadable and slow, so the map shows only the
-// recognisable ones when zoomed out and fills in the smaller places as the user
-// closes in — the same way paper atlases label by scale.
-function tiersForZoom(zoom) {
-  if (zoom < 5) return ["mega"];
-  if (zoom < 7) return ["mega", "major"];
-  if (zoom < 9) return ["mega", "major", "notable"];
-  return ["mega", "major", "notable", "hidden"];
-}
+// The viewport rules live in a module shared byte-for-byte with the native app,
+// so a pan shows the same cities on both. lonRanges is re-exported because it
+// was public here first and has its own tests.
+export { lonRanges, tiersForZoom, usableBounds } from "./shared/cityBounds.js";
 
-// Longitude is stored in [-180, 180], but a map viewport is not. Panning west
-// of the antimeridian gives Leaflet bounds like west=174.8, east=184.2 — a
-// perfectly ordered pair whose eastern half simply doesn't exist in that range,
-// so a plain BETWEEN silently drops every city past the date line. Turn the
-// viewport into the one or two real ranges it actually covers.
-export function lonRanges(west, east) {
-  if (east - west >= 360) return [[-180, 180]];         // whole world in view
-  // Left exact when it is already valid: the modulo round-trip is lossy in
-  // binary floating point (21.3 comes back as 21.299999999999955), and there is
-  // no reason to perturb the overwhelmingly common in-range case.
-  const wrap = (l) => (l >= -180 && l <= 180 ? l : ((((l + 180) % 360) + 360) % 360) - 180);
-  const w = wrap(west);
-  const e = wrap(east);
-  return w > e ? [[w, 180], [-180, e]] : [[w, e]];
-}
+
 
 // Cities inside the visible rectangle, most recognisable first.
 // `bounds` is { south, west, north, east } in degrees.
@@ -255,9 +236,8 @@ export function lonRanges(west, east) {
 // rectangle would fill localStorage with near-duplicates. The queries are small
 // and indexed; panning stays cheap.
 export async function getCitiesInBounds(bounds, { zoom = 6, limit = 120 } = {}) {
-  if (!supabase || !bounds) return [];
+  if (!supabase || !usableBounds(bounds)) return [];
   const { south, west, north, east } = bounds;
-  if ([south, west, north, east].some((v) => typeof v !== "number" || Number.isNaN(v))) return [];
 
   const query = (w, e) => supabase
     .from("cities")
