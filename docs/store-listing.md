@@ -187,7 +187,7 @@ a feature set. Anything written above must be true of `mobile-native/`.
 | End-of-trip recap | yes | yes |
 | Photo gallery tied to trip and stop | yes | yes |
 | Album PDF and short videos | yes | yes |
-| **Group planning** (invite, vote, split) | yes | **no** — no Collab screen |
+| Group planning (vote, split the bill) | demo | demo — same engine |
 | Weather for the trip dates | yes | yes |
 | Route optimisation | yes | yes |
 | Photos on a map | yes | yes |
@@ -195,8 +195,16 @@ a feature set. Anything written above must be true of `mobile-native/`.
 
 How to check a claim before writing it: the feature has to be reachable from a
 screen in `mobile-native/src/screens/`. A module existing in
-`mobile-native/src/lib/` proves nothing — four of those are dead code on
-Android, which is exactly how the first draft went wrong.
+`mobile-native/src/lib/` proves nothing — several of those were dead code on
+Android, which is exactly how the first draft went wrong. (`mockCollab.js` was
+one of them, and the dead copy was an older, buggier version than the web's.)
+
+**"demo" is not "yes".** Group planning runs entirely on the device: the other
+people are personas, their votes are replayed from a script, and nothing syncs
+between phones. The invite sheet says so in all 16 languages. That is why the
+listing copy never mentions inviting anyone, voting, or splitting a bill — do
+not add a bullet for it. What is real, and could be described if it ever needs
+to be, is the settle-up arithmetic and the itinerary the invite shares.
 
 ## Claims that depend on the Supabase migration
 

@@ -11,18 +11,32 @@ export const MAX_MEMBERS = 10;
 
 // Everyone who can be part of a trip. `you` is always the owner and, at the
 // start, the only member — everybody else appears solely once you invite them.
+//
+// `tone` is a palette KEY, not a colour. Reading `C.gold` here would freeze the
+// value at module-load time: the accent and light/dark mode can both change
+// afterwards, and on native `C` is still an empty object at this point, so
+// every avatar ring would have been `undefined`. Resolve with personColor().
 export const PEOPLE = {
-  you:    { id: "you",    name: "Tu",     avatar: "😎", color: C.gold },
-  maria:  { id: "maria",  name: "Maria",  avatar: "🦊", color: C.blue },
-  andrei: { id: "andrei", name: "Andrei", avatar: "🐻", color: C.green },
-  ioana:  { id: "ioana",  name: "Ioana",  avatar: "🦉", color: C.purple },
-  vlad:   { id: "vlad",   name: "Vlad",   avatar: "🦅", color: C.red },
-  elena:  { id: "elena",  name: "Elena",  avatar: "🐱", color: C.goldLight },
-  radu:   { id: "radu",   name: "Radu",   avatar: "🐺", color: "#5FC3E4" },
-  ana:    { id: "ana",    name: "Ana",    avatar: "🐝", color: "#FFB84C" },
-  mihai:  { id: "mihai",  name: "Mihai",  avatar: "🦁", color: "#E0705C" },
-  diana:  { id: "diana",  name: "Diana",  avatar: "🦋", color: "#B45CF3" },
+  you:    { id: "you",    name: "Tu",     avatar: "😎", tone: "gold" },
+  maria:  { id: "maria",  name: "Maria",  avatar: "🦊", tone: "blue" },
+  andrei: { id: "andrei", name: "Andrei", avatar: "🐻", tone: "green" },
+  ioana:  { id: "ioana",  name: "Ioana",  avatar: "🦉", tone: "purple" },
+  vlad:   { id: "vlad",   name: "Vlad",   avatar: "🦅", tone: "red" },
+  elena:  { id: "elena",  name: "Elena",  avatar: "🐱", tone: "goldLight" },
+  radu:   { id: "radu",   name: "Radu",   avatar: "🐺", tone: "#5FC3E4" },
+  ana:    { id: "ana",    name: "Ana",    avatar: "🐝", tone: "#FFB84C" },
+  mihai:  { id: "mihai",  name: "Mihai",  avatar: "🦁", tone: "#E0705C" },
+  diana:  { id: "diana",  name: "Diana",  avatar: "🦋", tone: "#B45CF3" },
 };
+
+// The colour for a person, in the palette as it is right now. A `tone` that is
+// already a literal colour passes straight through; an unknown id falls back to
+// the accent rather than rendering a ring of `undefined`.
+export function personColor(id) {
+  const tone = PEOPLE[id]?.tone;
+  if (!tone) return C.gold;
+  return tone.startsWith("#") ? tone : (C[tone] || C.gold);
+}
 
 // Everyone you can invite — i.e. everyone except yourself.
 export const CONTACTS = Object.keys(PEOPLE).filter((id) => id !== "you");

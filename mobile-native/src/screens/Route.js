@@ -12,6 +12,9 @@ import { countryName, countryFlagOf } from "../lib/countryNames.js";
 import { dayDistanceKm, optimizeItinerary } from "../lib/geo.js";
 import { fetchWeather } from "../lib/weather.js";
 import { isPremium, usePremium } from "../lib/premium.js";
+import { tripAsText } from "../lib/tripText.js";
+import { loadCollab } from "../lib/mockCollab.js";
+import Collab from "./Collab.js";
 import Paywall from "../components/Paywall.js";
 import { exportAlbumPdf, buildShortPayload, buildShortScenes, shareShort } from "../lib/albumExport.js";
 import { MIN_PHOTOS } from "../lib/album.js";
@@ -22,7 +25,7 @@ import {
   Star, Clock, Ticket, Lightbulb, NotebookPen, Map, Navigation, Check,
   MapPin, Footprints, Save, PartyPopper, Share2, MessagesSquare, Hand, Heart,
   Coins, Bath, LifeBuoy, Ambulance, Plug, ArrowLeftRight, Utensils, TrainFront,
-  Hourglass, CategoryIcon, Camera, Lock, Film, WeatherIcon, Zap,
+  Hourglass, CategoryIcon, Camera, Lock, Film, WeatherIcon, Zap, Users,
 } from "../icons.js";
 
 const CUR_CODES = Object.keys(CURRENCIES);
@@ -358,6 +361,8 @@ export default function Route({ route, onBack, onSaved }) {
   const cycleCur = () => setCurrency((c) => CUR_CODES[(CUR_CODES.indexOf(c) + 1) % CUR_CODES.length]);
 
   const [recap, setRecap] = useState(false);
+  const [collab, setCollab] = useState(false);
+  const groupCount = loadCollab(r).members.length;
 
   // Edit the currently-open stop by its position (day/stop index), not by name —
   // two stops can share a name, which would otherwise get edited together.
@@ -398,18 +403,11 @@ export default function Route({ route, onBack, onSaved }) {
   const noteOpenStop = (note) => editOpenStop({ note });
 
   // Share a plain-text itinerary via the native share sheet (no hosted URL).
+  // The text itself lives in tripText.js, because the group invite sends the
+  // same thing and the two must not drift apart.
   const shareTrip = async () => {
-    const lines = [tripTitle(r, t), ""];
-    r.itinerary.forEach((day) => {
-      if (r.days > 1) lines.push(t("day", { n: day.day }) + ":");
-      day.stops.forEach((s) => {
-        lines.push(`${s.time} · ${s.emoji || "📍"} ${s.name}`);
-        if (s.note) lines.push(`   📝 ${s.note}`);
-      });
-      lines.push("");
-    });
-    lines.push("Turism, dar simplu!");
-    try { await Share.share({ message: lines.join("\n"), title: tripTitle(r, t) }); } catch {}
+    const title = tripTitle(r, t);
+    try { await Share.share({ message: tripAsText(r, t, title), title }); } catch {}
   };
 
   return (
@@ -547,6 +545,9 @@ export default function Route({ route, onBack, onSaved }) {
             {optimized ? t("routeOptimized") : t("optimizeRoute")}
           </Btn>
         )}
+        <Btn icon={Users} variant="soft" color={C.blue} onPress={() => setCollab(true)} style={{ marginTop: 10 }}>
+          {t("planGroup")}{groupCount > 1 ? ` · ${groupCount}` : ""}
+        </Btn>
         <Btn icon={PartyPopper} variant="soft" color={C.gold} onPress={() => setRecap(true)} style={{ marginTop: 10 }}>{t("recapOpen")}</Btn>
         <Btn icon={Share2} variant="soft" color={C.blue} onPress={shareTrip} style={{ marginTop: 10 }}>{t("shareTitle")}</Btn>
         <Btn
@@ -614,6 +615,11 @@ export default function Route({ route, onBack, onSaved }) {
         <StopDetail stop={openStop.stop} prev={openStop.prev} destName={r.destName} route={r} onClose={() => setOpenStop(null)} onToggleDone={toggleDone} onRate={rateOpenStop} onNote={noteOpenStop} />
       )}
       {recap && <RecapSheet route={r} onClose={() => setRecap(false)} onShare={() => { setRecap(false); shareTrip(); }} />}
+      {collab && (
+        <View style={StyleSheet.absoluteFill}>
+          <Collab route={r} onClose={() => setCollab(false)} />
+        </View>
+      )}
     </View>
   );
 }

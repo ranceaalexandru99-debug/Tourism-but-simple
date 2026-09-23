@@ -3,6 +3,7 @@ import { C } from "../theme.js";
 import { Btn } from "../components/ui.jsx";
 import {
   PEOPLE, CONTACTS, MAX_MEMBERS, loadCollab, saveCollab, activityScript, computeBalances,
+  personColor,
 } from "../mockCollab.js";
 import { useI18n, tripTitle } from "../i18n.js";
 import {
@@ -18,7 +19,7 @@ function Avatar({ id, size = 34, ring = true, dim = false }) {
   return (
     <div title={p.name} style={{
       width: size, height: size, borderRadius: "50%", background: C.card,
-      border: ring ? `2px solid ${p.color}` : "none",
+      border: ring ? `2px solid ${personColor(id)}` : "none",
       display: "flex", alignItems: "center", justifyContent: "center",
       fontSize: size * 0.5, flexShrink: 0, opacity: dim ? 0.5 : 1,
     }}>{p.avatar}</div>
