@@ -133,6 +133,52 @@ Saved trips open offline. You can plan without an account and without giving us 
 
 ---
 
+## Artwork
+
+### Feature graphic — generated
+
+```
+node scripts/store-graphics.mjs
+```
+
+Writes `store/feature-graphic.png` at 1024×500, which Play requires. It is
+branded artwork rather than a picture of the app, which is why it can be
+generated at all. Nothing important sits near the edges: Play crops and
+overlays this on some surfaces.
+
+### Screenshots — only from the real app
+
+Play requires between **2 and 8** phone screenshots, and requires them to show
+the app as it actually runs. They cannot be generated here, and they must not
+come from the web build: the two share a design, so the result would look
+close — and close is what gets a listing rejected, besides being a promise
+about software the buyer is not being sold.
+
+**Expo Go shows the real native app**, so captures taken there are legitimate.
+
+1. Open the app on the phone
+2. Take the shots in the order below
+3. Copy them into `store/raw/` as `01.png`, `02.png`, …
+4. `node scripts/store-screenshots.mjs`
+
+That writes `store/screenshots/` at 1080×1920, each shot scaled to fit with a
+caption above it. The captions live in the script, in shot order:
+
+| # | Shot | Caption |
+|---|---|---|
+| 1 | Home, with the search field | Spui unde. Primești traseul. |
+| 2 | A route, list view, day 1 visible | Pe zile, cu ore și costuri |
+| 3 | A stop sheet open, with a local tip | Fiecare oprire, cu sfatul ei |
+| 4 | The route map with every pin | Tot traseul pe hartă |
+| 5 | Gallery, a few photos, map view | Pozele tale, legate de locuri |
+| 6 | The finished album | Album foto, gata de tipărit |
+| 7 | The short editor, or a rendered clip | Un clip scurt din excursie |
+| 8 | Me, with the language list open | În 16 limbi, și fără internet |
+
+Two things to check before capturing: the phone is on a **saved trip with real
+photos**, not an empty state, and the status bar is not showing something you
+would rather not publish.
+
 ## Claims that depend on the Supabase migration
 
 Two lines above describe coverage that is not live until
