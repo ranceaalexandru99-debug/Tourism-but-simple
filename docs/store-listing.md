@@ -37,24 +37,17 @@ PLANIFICARE
 • Scrie liber: „Brașov 3 zile, gastronomie" — atât.
 • Traseu pe zile, cu ore realiste și durata fiecărei opriri
 • Buget estimat pe trei niveluri: econom, echilibrat, premium
-• Ordinea opririlor optimizată, ca să mergi mai puțin pe jos
 • Obiective reale din OpenStreetMap: coordonate, program, categorii
 
 ÎN TIMPUL CĂLĂTORIEI
 • Hartă cu toate opririle și deschidere directă în Google Maps
 • Program, preț și un sfat local pentru fiecare obiectiv
 • Notițe personale la orice oprire — rezervări, mementouri
-• Vremea pentru zilele călătoriei
 • Bifezi ce ai vizitat și dai stele
-
-ÎN GRUP
-• Invită prieteni la aceeași excursie
-• Votați obiectivele împreună
-• Împărțiți cheltuielile, cu soldul calculat automat
+• Recapitulare la final: cât ai mers, ce ai văzut, ce ți-a plăcut
 
 AMINTIRI
 • Galerie de poze legate de excursie și de oprire
-• Vezi-ți pozele pe hartă, acolo unde le-ai făcut
 
 EXTRA (deblocare unică, opțională)
 • Album foto ca PDF: fiecare poză așezată sub ziua și locul ei, pe o singură pagină, de tipărit sau trimis
@@ -96,24 +89,17 @@ PLANNING
 • Write it plainly: "Rome 3 days, food and a bit of history"
 • A route per day, with realistic times and how long each stop takes
 • Estimated budget at three levels: budget, balanced, premium
-• Stops reordered so you walk less
 • Real places from OpenStreetMap: coordinates, opening hours, categories
 
 WHILE YOU TRAVEL
 • A map of every stop, and one tap into Google Maps
 • Hours, price and a local tip for each place
 • Your own notes on any stop — bookings, reminders
-• Weather for the days you are travelling
 • Tick off what you have seen, and rate it
-
-TOGETHER
-• Invite friends to the same trip
-• Vote on the stops as a group
-• Split the costs, with the balance worked out for you
+• A recap at the end: how far you walked, what you saw, what you liked
 
 WHAT YOU BRING HOME
 • A photo gallery tied to the trip and the stop
-• See your photos on a map, where you took them
 
 EXTRAS (one-off unlock, optional)
 • A photo album as a PDF: every picture filed under the day and place you took it, laid out on a single page to print or send
@@ -178,6 +164,33 @@ caption above it. The captions live in the script, in shot order:
 Two things to check before capturing: the phone is on a **saved trip with real
 photos**, not an empty state, and the status bar is not showing something you
 would rather not publish.
+
+## The listing describes the ANDROID app, which is not the web app
+
+This caught me out once and the first draft shipped four claims the Android
+build cannot honour. The two apps share modules and a design; they do not share
+a feature set. Anything written above must be true of `mobile-native/`.
+
+| Feature | Web | Android |
+|---|---|---|
+| Trip planning, day by day | yes | yes |
+| Budget tiers, currency switch | yes | yes |
+| Stop sheet: hours, price, tip, notes | yes | yes |
+| Route map, open in Google Maps | yes | yes |
+| Visited ticks and ratings | yes | yes |
+| End-of-trip recap | yes | yes |
+| Photo gallery tied to trip and stop | yes | yes |
+| Album PDF and short videos | yes | yes |
+| **Group planning** (invite, vote, split) | yes | **no** — no Collab screen |
+| **Weather for the trip dates** | yes | **no** — `weather.js` is never called |
+| **Route optimisation** | yes | **no** — `optimizeItinerary` is never called |
+| **Photos on a map** | yes | **no** — `MemoryMap` is web-only |
+| **Explore map** (pan to discover cities) | yes | **no** |
+
+How to check a claim before writing it: the feature has to be reachable from a
+screen in `mobile-native/src/screens/`. A module existing in
+`mobile-native/src/lib/` proves nothing — four of those are dead code on
+Android, which is exactly how the first draft went wrong.
 
 ## Claims that depend on the Supabase migration
 
