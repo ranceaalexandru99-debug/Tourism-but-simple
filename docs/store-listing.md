@@ -37,12 +37,14 @@ PLANIFICARE
 • Scrie liber: „Brașov 3 zile, gastronomie" — atât.
 • Traseu pe zile, cu ore realiste și durata fiecărei opriri
 • Buget estimat pe trei niveluri: econom, echilibrat, premium
+• Ordinea opririlor optimizată, când chiar ai de câștigat
 • Obiective reale din OpenStreetMap: coordonate, program, categorii
 
 ÎN TIMPUL CĂLĂTORIEI
 • Hartă cu toate opririle și deschidere directă în Google Maps
 • Program, preț și un sfat local pentru fiecare obiectiv
 • Notițe personale la orice oprire — rezervări, mementouri
+• Vremea pentru zilele călătoriei
 • Bifezi ce ai vizitat și dai stele
 • Recapitulare la final: cât ai mers, ce ai văzut, ce ți-a plăcut
 
@@ -89,12 +91,14 @@ PLANNING
 • Write it plainly: "Rome 3 days, food and a bit of history"
 • A route per day, with realistic times and how long each stop takes
 • Estimated budget at three levels: budget, balanced, premium
+• Stops reordered when that actually saves you a walk
 • Real places from OpenStreetMap: coordinates, opening hours, categories
 
 WHILE YOU TRAVEL
 • A map of every stop, and one tap into Google Maps
 • Hours, price and a local tip for each place
 • Your own notes on any stop — bookings, reminders
+• Weather for the days you are travelling
 • Tick off what you have seen, and rate it
 • A recap at the end: how far you walked, what you saw, what you liked
 
@@ -156,7 +160,7 @@ caption above it. The captions live in the script, in shot order:
 | 2 | A route, list view, day 1 visible | Pe zile, cu ore și costuri |
 | 3 | A stop sheet open, with a local tip | Fiecare oprire, cu sfatul ei |
 | 4 | The route map with every pin | Tot traseul pe hartă |
-| 5 | Gallery, a few photos, map view | Pozele tale, legate de locuri |
+| 5 | Gallery grid, a few photos with captions | Pozele tale, legate de locuri |
 | 6 | The finished album | Album foto, gata de tipărit |
 | 7 | The short editor, or a rendered clip | Un clip scurt din excursie |
 | 8 | Me, with the language list open | În 16 limbi, și fără internet |
@@ -182,8 +186,8 @@ a feature set. Anything written above must be true of `mobile-native/`.
 | Photo gallery tied to trip and stop | yes | yes |
 | Album PDF and short videos | yes | yes |
 | **Group planning** (invite, vote, split) | yes | **no** — no Collab screen |
-| **Weather for the trip dates** | yes | **no** — `weather.js` is never called |
-| **Route optimisation** | yes | **no** — `optimizeItinerary` is never called |
+| Weather for the trip dates | yes | yes |
+| Route optimisation | yes | yes |
 | **Photos on a map** | yes | **no** — `MemoryMap` is web-only |
 | **Explore map** (pan to discover cities) | yes | **no** |
 

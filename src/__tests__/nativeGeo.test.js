@@ -150,6 +150,31 @@ describe("optimizeItinerary", () => {
     expect(optimizeItinerary([d])[0]).toBe(d);
   });
 
+  it("saves nothing measurable on a day that is already in the best order", () => {
+    // The native screen only offers the button when the saving clears 200 m.
+    // On a compact old town the reorder is often a no-op, and a button that
+    // changes nothing reads as a broken one.
+    const tidy = day([
+      stop("a", PIATA_SFATULUI),
+      stop("b", BISERICA_NEAGRA),
+      stop("c", POIANA_BRASOV),
+    ]);
+    const before = dayDistanceKm(tidy.stops);
+    const after = dayDistanceKm(optimizeItinerary([tidy])[0].stops);
+    expect(before - after).toBeLessThan(0.2);
+  });
+
+  it("saves a measurable distance on a day that is not", () => {
+    const messy = day([
+      stop("start", PIATA_SFATULUI),
+      stop("far", POIANA_BRASOV),
+      stop("near", BISERICA_NEAGRA),
+    ]);
+    const before = dayDistanceKm(messy.stops);
+    const after = dayDistanceKm(optimizeItinerary([messy])[0].stops);
+    expect(before - after).toBeGreaterThan(0.2);
+  });
+
   it("does not mutate the itinerary it was given", () => {
     const d = day([
       stop("start", PIATA_SFATULUI),

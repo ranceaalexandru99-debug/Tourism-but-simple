@@ -18,7 +18,8 @@ import { createElement } from "react";
 import {
   Landmark as _Landmark, Utensils as _Utensils, TreePine as _TreePine,
   Martini as _Martini, ShoppingBag as _ShoppingBag, Users as _Users,
-  MapPin as _MapPin,
+  MapPin as _MapPin, Sun as _Sun, CloudSun, CloudFog, CloudRain, CloudSnow,
+  CloudDrizzle, CloudLightning, Thermometer,
 } from "lucide-react-native";
 
 // Interest/tag → icon. First matching tag wins; order roughly "most defining".
@@ -38,4 +39,15 @@ export function CategoryIcon({ tags, size = 20, color, strokeWidth = 2, style })
   const hit = CAT_ICONS.find(([tag]) => list.includes(tag));
   const Cmp = hit ? hit[1] : _MapPin;
   return createElement(Cmp, { size, color, strokeWidth, style });
+}
+
+// Weather code (the `code` weather.js returns) → icon. The same seven the web
+// app uses, so a rainy Tuesday looks the same on both.
+const WX_ICONS = {
+  clear: _Sun, partly: CloudSun, fog: CloudFog, rain: CloudRain,
+  snow: CloudSnow, showers: CloudDrizzle, storm: CloudLightning,
+};
+
+export function WeatherIcon({ code, size = 16, color, style }) {
+  return createElement(WX_ICONS[code] || Thermometer, { size, color, style });
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, ScrollView, Pressable, Modal, Linking, Share, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
@@ -9,7 +9,8 @@ import PoiImage from "../components/PoiImage.js";
 import RecapSheet from "../components/RecapSheet.js";
 import { CURRENCIES, convert, phrasesFor, goodToKnow } from "../lib/locale.js";
 import { countryName, countryFlagOf } from "../lib/countryNames.js";
-import { dayDistanceKm } from "../lib/geo.js";
+import { dayDistanceKm, optimizeItinerary } from "../lib/geo.js";
+import { fetchWeather } from "../lib/weather.js";
 import { isPremium, usePremium } from "../lib/premium.js";
 import Paywall from "../components/Paywall.js";
 import { exportAlbumPdf, buildShortPayload, buildShortScenes, shareShort } from "../lib/albumExport.js";
@@ -21,7 +22,7 @@ import {
   Star, Clock, Ticket, Lightbulb, NotebookPen, Map, Navigation, Check,
   MapPin, Footprints, Save, PartyPopper, Share2, MessagesSquare, Hand, Heart,
   Coins, Bath, LifeBuoy, Ambulance, Plug, ArrowLeftRight, Utensils, TrainFront,
-  Hourglass, CategoryIcon, Camera, Lock, Film,
+  Hourglass, CategoryIcon, Camera, Lock, Film, WeatherIcon, Zap,
 } from "../icons.js";
 
 const CUR_CODES = Object.keys(CURRENCIES);
@@ -300,6 +301,19 @@ export default function Route({ route, onBack, onSaved }) {
   const [currency, setCurrency] = useState("EUR");
   const [r, setR] = useState(route);
 
+  // Forecast for the trip dates. Open-Meteo answers for free and without a
+  // key; it covers about two weeks ahead, so a trip planned further out simply
+  // shows no pills. Failure is silent by design — a missing forecast must not
+  // interrupt someone reading their itinerary.
+  const [weather, setWeather] = useState({});
+  useEffect(() => {
+    let alive = true;
+    fetchWeather(r.center, r.startDate, r.days)
+      .then((w) => { if (alive) setWeather(w || {}); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [r.center, r.startDate, r.days]);
+
   const phrases = phrasesFor(r.country);
   const info = goodToKnow(r.country);
   const cycleCur = () => setCurrency((c) => CUR_CODES[(CUR_CODES.indexOf(c) + 1) % CUR_CODES.length]);
@@ -317,6 +331,27 @@ export default function Route({ route, onBack, onSaved }) {
     updated.itinerary[openStop.di].stops[openStop.si] = next;
     setR(updated);
     setOpenStop((o) => ({ ...o, stop: next }));
+  };
+
+  // Reordering each day by proximity, so less of the day is spent walking
+  // between stops that happen to be listed next to each other.
+  const [optimized, setOptimized] = useState(false);
+
+  // How many kilometres the reorder would save across the whole trip. Computed
+  // rather than assumed: on a compact old town it is often zero, and a button
+  // that changes nothing is worse than no button.
+  const optimizeSaving = optimized ? 0 : (() => {
+    const before = r.itinerary.reduce((sum, d) => sum + dayDistanceKm(d.stops), 0);
+    const after = optimizeItinerary(r.itinerary).reduce((sum, d) => sum + dayDistanceKm(d.stops), 0);
+    return before - after;
+  })();
+
+  const optimize = () => {
+    const next = { ...r, itinerary: optimizeItinerary(r.itinerary) };
+    setR(next);
+    setOptimized(true);
+    // Keep a saved trip in step, or the reorder is lost on the next open.
+    if (saved) onSaved(next);
   };
 
   const toggleDone = () => editOpenStop({ done: !openStop.stop.done });
@@ -385,6 +420,7 @@ export default function Route({ route, onBack, onSaved }) {
 
         {r.itinerary.map((day, di) => {
           const km = dayDistanceKm(day.stops);
+          const w = day.date && weather[day.date];
           return (
             <View key={day.day} style={{ marginBottom: 22, marginTop: 4 }}>
               <View style={styles.dayHead}>
@@ -404,6 +440,17 @@ export default function Route({ route, onBack, onSaved }) {
                     <Navigation size={12} color={C.blue} />
                     <Text style={{ color: C.blue, fontFamily: FONT.bold, fontSize: 12 }}>Maps</Text>
                   </Pressable>
+                )}
+                {/* The forecast only exists for dates within the API's range,
+                    so most days of a trip planned months ahead show nothing —
+                    a missing pill, not an error message. */}
+                {w && (
+                  <View style={[styles.wxPill, { flexDirection: "row", alignItems: "center", gap: 4 }]}>
+                    <WeatherIcon code={w.code} size={12} color={C.mutedLight} />
+                    <Text style={{ color: C.mutedLight, fontFamily: FONT.bold, fontSize: 12 }}>
+                      {w.tmax}° / {w.tmin}°
+                    </Text>
+                  </View>
                 )}
               </View>
 
@@ -451,6 +498,15 @@ export default function Route({ route, onBack, onSaved }) {
           </View>
         ) : (
           <Btn icon={Save} onPress={() => { onSaved(r); setSaved(true); }}>{t("save")}</Btn>
+        )}
+        {/* Reordering is offered only when it would actually help: the button
+            measures the walk before and after, and stays hidden unless the
+            saving is worth a tap. Offering it on an already-good day, and
+            having nothing move, reads as a broken button. */}
+        {optimizeSaving > 0.2 && (
+          <Btn icon={Zap} variant="soft" color={C.green} onPress={optimize} style={{ marginTop: 10 }}>
+            {optimized ? t("routeOptimized") : t("optimizeRoute")}
+          </Btn>
         )}
         <Btn icon={PartyPopper} variant="soft" color={C.gold} onPress={() => setRecap(true)} style={{ marginTop: 10 }}>{t("recapOpen")}</Btn>
         <Btn icon={Share2} variant="soft" color={C.blue} onPress={shareTrip} style={{ marginTop: 10 }}>{t("shareTitle")}</Btn>
@@ -544,6 +600,7 @@ const styles = themedStyles(() => StyleSheet.create({
   dayBadge: { backgroundColor: C.gold, borderRadius: 9, paddingVertical: 5, paddingHorizontal: 12 },
   kmPill: { backgroundColor: C.mutedLight + "18", borderWidth: 1, borderColor: C.border, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 },
   mapsPill: { backgroundColor: C.blue + "18", borderWidth: 1, borderColor: C.blue + "44", borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 },
+  wxPill: { backgroundColor: C.blue + "14", borderWidth: 1, borderColor: C.border, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 },
   stopRow: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 12 },
   stopNum: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.card, borderWidth: 2, borderColor: C.gold, alignItems: "center", justifyContent: "center" },
   stopCard: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 10 },
