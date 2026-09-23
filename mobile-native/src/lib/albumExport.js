@@ -170,6 +170,26 @@ export async function buildShortPayload(route, memories, labels, recipe) {
   };
 }
 
+/**
+ * Read a list of memories as small inlined images.
+ *
+ * Anything that has to look at photos outside React Native — the album page,
+ * the short renderer, the photo map — needs them as data URLs, because none of
+ * those can reach the app's own file:// paths and none of them should be given
+ * the access to try. Each drops out silently if its file has gone.
+ *
+ * @param {Array} memories entries carrying a `uri`
+ * @param {number} px      the size they will be displayed at
+ */
+export async function toThumbnails(memories, px) {
+  const out = [];
+  for (const m of memories || []) {
+    const dataUrl = await toDataUrl(m.uri, px);
+    if (dataUrl) out.push({ ...m, dataUrl });
+  }
+  return out;
+}
+
 // The scenes the editor shows, before any recipe is applied. Same shape the
 // renderer eventually receives, so one screen can drive both.
 export async function buildShortScenes(route, memories) {

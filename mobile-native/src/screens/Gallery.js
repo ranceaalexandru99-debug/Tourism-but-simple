@@ -11,7 +11,8 @@ import { isPremium, usePremium } from "../lib/premium.js";
 import Paywall from "../components/Paywall.js";
 import ShortRenderer from "../components/ShortRenderer.js";
 import ShortEditor from "../components/ShortEditor.js";
-import { Camera, Save, X, Trash2, MapPin, TriangleAlert, Lock, Film } from "../icons.js";
+import MemoryMap from "../components/MemoryMap.js";
+import { Camera, Save, X, Trash2, MapPin, TriangleAlert, Lock, Film, LayoutGrid, Map } from "../icons.js";
 
 // Soft warning once the gallery grows large — photos live on the device.
 const GALLERY_WARN = 50;
@@ -97,6 +98,10 @@ export default function Gallery({ saved }) {
   const [pending, setPending] = useState(null);
   const [viewing, setViewing] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState("grid");
+
+  // Photos carry coordinates only when they were taken from a stop.
+  const geoCount = memories.filter((m) => Array.isArray(m.ll)).length;
 
   const refresh = () => setMemories(listMemories());
   useEffect(() => { refresh(); }, []);
@@ -104,10 +109,10 @@ export default function Gallery({ saved }) {
   // Only trips that actually have enough photos here. Offering a button that
   // can only fail is worse than offering none.
   const albumTrips = useMemo(() => {
-    // A plain object rather than a Map: the web copy of this screen imports
-    // lucide's `Map` icon, which shadows the global constructor and crashed the
-    // whole screen. Nothing imports it here yet — keeping the two identical
-    // means adding that icon later cannot reintroduce the bug.
+    // A plain object rather than a Map, and now it has to be: this file
+    // imports lucide's `Map` icon for the view toggle, which shadows the
+    // global constructor. `new Map()` here would try to instantiate a React
+    // component — the bug that once crashed the whole gallery on the web.
     const counts = {};
     for (const m of memories) if (m.tripId) counts[m.tripId] = (counts[m.tripId] || 0) + 1;
     return (saved || [])
@@ -330,12 +335,34 @@ export default function Gallery({ saved }) {
           </View>
         )}
 
+        {/* Grid or map. Offered only when there is something to plot: a photo
+            gets coordinates by being taken from a stop, so a gallery filled
+            from the Add button alone has none, and a map of it would be an
+            empty dark rectangle. */}
+        {memories.length > 0 && geoCount > 0 && (
+          <View style={styles.viewToggle}>
+            {[["grid", t("galGridView"), LayoutGrid], ["map", t("galMapView"), Map]].map(([key, label, Icon]) => (
+              <Pressable
+                key={key}
+                onPress={() => setView(key)}
+                accessibilityState={{ selected: view === key }}
+                style={[styles.viewTab, view === key && { backgroundColor: C.gold }]}
+              >
+                <Icon size={14} color={view === key ? C.bg : C.mutedLight} />
+                <Text style={{ color: view === key ? C.bg : C.mutedLight, fontFamily: FONT.bold, fontSize: 14 }}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+
         {memories.length === 0 ? (
           <Pressable onPress={add} style={styles.empty}>
             <View style={{ marginBottom: 12 }}><Camera size={48} color={C.gold} strokeWidth={1.4} /></View>
             <Text style={{ color: C.cream, fontSize: 16, fontFamily: FONT.bold, marginBottom: 4 }}>{t("galEmpty")}</Text>
             <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", lineHeight: 20 }}>{t("galEmptySub")}</Text>
           </Pressable>
+        ) : view === "map" ? (
+          <MemoryMap memories={memories} onPick={setViewing} />
         ) : (
           <View style={styles.grid}>
             {memories.map((m) => (
@@ -416,6 +443,8 @@ const styles = themedStyles(() => StyleSheet.create({
   preview: { width: "100%", height: 220, borderRadius: 16, marginBottom: 16, backgroundColor: C.bg },
   input: { backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, color: C.cream, fontSize: 15, fontFamily: FONT.body, marginBottom: 14 },
   chip: { borderRadius: 999, borderWidth: 1, paddingVertical: 8, paddingHorizontal: 13 },
+  viewToggle: { flexDirection: "row", gap: 8, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 4, marginBottom: 14 },
+  viewTab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 10 },
   viewer: { flex: 1, backgroundColor: "#000e", justifyContent: "center", padding: 16 },
   viewerBar: { position: "absolute", top: 44, left: 16, right: 16, flexDirection: "row", justifyContent: "space-between", zIndex: 2 },
   delBtn: { backgroundColor: C.red + "22", borderWidth: 1, borderColor: C.red + "66", borderRadius: 999, paddingVertical: 7, paddingHorizontal: 14 },

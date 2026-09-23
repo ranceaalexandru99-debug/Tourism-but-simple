@@ -45,6 +45,7 @@ PLANIFICARE
 • Program, preț și un sfat local pentru fiecare obiectiv
 • Notițe personale la orice oprire — rezervări, mementouri
 • Vremea pentru zilele călătoriei
+• Pozele făcute la o oprire, puse pe harta excursiei
 • Bifezi ce ai vizitat și dai stele
 • Recapitulare la final: cât ai mers, ce ai văzut, ce ți-a plăcut
 
@@ -99,6 +100,7 @@ WHILE YOU TRAVEL
 • Hours, price and a local tip for each place
 • Your own notes on any stop — bookings, reminders
 • Weather for the days you are travelling
+• Photos you take at a stop, pinned on a map of the trip
 • Tick off what you have seen, and rate it
 • A recap at the end: how far you walked, what you saw, what you liked
 
@@ -188,7 +190,7 @@ a feature set. Anything written above must be true of `mobile-native/`.
 | **Group planning** (invite, vote, split) | yes | **no** — no Collab screen |
 | Weather for the trip dates | yes | yes |
 | Route optimisation | yes | yes |
-| **Photos on a map** | yes | **no** — `MemoryMap` is web-only |
+| Photos on a map | yes | yes |
 | **Explore map** (pan to discover cities) | yes | **no** |
 
 How to check a claim before writing it: the feature has to be reachable from a

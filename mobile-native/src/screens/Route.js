@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, Modal, Linking, Share, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal, Linking, Share, TextInput, StyleSheet, KeyboardAvoidingView, Platform, Alert } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
@@ -17,7 +17,7 @@ import { exportAlbumPdf, buildShortPayload, buildShortScenes, shareShort } from 
 import { MIN_PHOTOS } from "../lib/album.js";
 import ShortRenderer from "../components/ShortRenderer.js";
 import ShortEditor from "../components/ShortEditor.js";
-import { listMemories } from "../lib/gallery.js";
+import { listMemories, pickPhoto, addMemory } from "../lib/gallery.js";
 import {
   Star, Clock, Ticket, Lightbulb, NotebookPen, Map, Navigation, Check,
   MapPin, Footprints, Save, PartyPopper, Share2, MessagesSquare, Hand, Heart,
@@ -57,11 +57,41 @@ function RatingStars({ value = 0, onChange }) {
   );
 }
 
-function StopDetail({ stop, prev, destName, onClose, onToggleDone, onRate, onNote }) {
+function StopDetail({ stop, prev, destName, route, onClose, onToggleDone, onRate, onNote }) {
   const { t } = useI18n();
   const canDir = prev && prev.ll && stop.ll;
   const [note, setNote] = useState(stop.note || "");
   const commitNote = () => { if ((note || "") !== (stop.note || "")) onNote(note.trim()); };
+
+  // Photograph THIS attraction. The point is not saving a tap — it is that the
+  // photo arrives already knowing where it was taken and which stop it belongs
+  // to, from the stop's own coordinates. No location permission is involved,
+  // and none is wanted: the attraction knows where it is.
+  //
+  // Without this the native gallery had no photo with coordinates at all, so a
+  // map of them would have been empty, and no photo could be filed under its
+  // stop in an album either.
+  const [photo, setPhoto] = useState("idle");
+  const takePhoto = async () => {
+    setPhoto("saving");
+    try {
+      const uri = await pickPhoto(true);
+      if (uri === "denied") { setPhoto("idle"); Alert.alert(t("galAddPhoto"), t("galPermDenied")); return; }
+      if (!uri) { setPhoto("idle"); return; }
+      const ok = addMemory({
+        id: `m${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+        ts: Date.now(), uri, caption: stop.name,
+        tripId: route?.id || null,
+        tripTitle: route ? tripTitle(route, t) : null,
+        stopName: stop.name,
+        ll: stop.ll || null,
+      });
+      setPhoto(ok ? "saved" : "idle");
+      if (!ok) Alert.alert(t("galAddPhoto"), t("galPhotoSaveFailed"));
+    } catch {
+      setPhoto("idle");
+    }
+  };
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onClose}>
       {/* A Modal renders outside the main tree, so app-level keyboard handling
@@ -115,6 +145,15 @@ function StopDetail({ stop, prev, destName, onClose, onToggleDone, onRate, onNot
             multiline
             style={styles.noteInput}
           />
+
+          <Btn
+            icon={photo === "saved" ? Check : Camera}
+            variant="soft"
+            color={photo === "saved" ? C.green : C.gold}
+            disabled={photo === "saving"}
+            onPress={takePhoto}
+            style={{ marginBottom: 10 }}
+          >{photo === "saved" ? t("galPhotoSaved") : t("galAddPhoto")}</Btn>
 
           <Btn icon={Map} onPress={() => openStopsInMaps([stop])}>{t("openMaps")}</Btn>
           {canDir && (
@@ -572,7 +611,7 @@ export default function Route({ route, onBack, onSaved }) {
       )}
 
       {openStop && (
-        <StopDetail stop={openStop.stop} prev={openStop.prev} destName={r.destName} onClose={() => setOpenStop(null)} onToggleDone={toggleDone} onRate={rateOpenStop} onNote={noteOpenStop} />
+        <StopDetail stop={openStop.stop} prev={openStop.prev} destName={r.destName} route={r} onClose={() => setOpenStop(null)} onToggleDone={toggleDone} onRate={rateOpenStop} onNote={noteOpenStop} />
       )}
       {recap && <RecapSheet route={r} onClose={() => setRecap(false)} onShare={() => { setRecap(false); shareTrip(); }} />}
     </View>
