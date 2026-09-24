@@ -54,11 +54,20 @@ export default function Me({ user, saved, onLogout, onErase }) {
         {/* Accent swatches */}
         <View style={[styles.row, { borderTopWidth: 1, borderTopColor: C.border }]}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
-            <Sparkles size={15} color={C.mutedLight} /><Text style={styles.rowLabel}>Accent</Text>
+            <Sparkles size={15} color={C.mutedLight} /><Text style={styles.rowLabel}>{t("accentLabel")}</Text>
           </View>
           <View style={{ flexDirection: "row", gap: 8 }}>
             {Object.entries(THEME_ACCENTS).map(([key, col]) => (
-              <Pressable key={key} onPress={() => setAccent(key)} style={[styles.swatch, { backgroundColor: col, borderColor: accent === key ? C.cream : "transparent" }]} />
+              // A coloured square with no text in it: a screen reader reads
+              // "button" and nothing else, six times in a row. The key is the
+              // colour's own name, which is as close to a label as this has.
+              <Pressable
+                key={key}
+                onPress={() => setAccent(key)}
+                accessibilityLabel={`${t("accentLabel")} ${key}`}
+                accessibilityState={{ selected: accent === key }}
+                style={[styles.swatch, { backgroundColor: col, borderColor: accent === key ? C.cream : "transparent" }]}
+              />
             ))}
           </View>
         </View>

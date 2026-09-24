@@ -2082,6 +2082,27 @@ const EXPLORE_I18N = {
 };
 for (const code in EXPLORE_I18N) Object.assign(T[code], EXPLORE_I18N[code]);
 
+// The accent-colour row, merged into the dictionaries above.
+const ACCENT_I18N = {
+  en: { accentLabel: "Accent" },
+  ro: { accentLabel: "Accent" },
+  fr: { accentLabel: "Accent" },
+  es: { accentLabel: "Acento" },
+  it: { accentLabel: "Accento" },
+  de: { accentLabel: "Akzent" },
+  pt: { accentLabel: "Destaque" },
+  nl: { accentLabel: "Accent" },
+  pl: { accentLabel: "Akcent" },
+  ru: { accentLabel: "Акцент" },
+  zh: { accentLabel: "强调色" },
+  ja: { accentLabel: "アクセント" },
+  tr: { accentLabel: "Vurgu" },
+  el: { accentLabel: "Τόνος" },
+  uk: { accentLabel: "Акцент" },
+  ko: { accentLabel: "강조색" },
+};
+for (const code in ACCENT_I18N) Object.assign(T[code], ACCENT_I18N[code]);
+
 // Shown when the device is out of storage and even discarding every cache did
 // not free enough room to save a trip.
 const STORAGE_I18N = {

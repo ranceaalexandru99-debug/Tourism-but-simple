@@ -101,7 +101,7 @@ export default function Me({ user, saved, onLogout, onDeleteAccount }) {
                       <MapPin size={11} />{r.totalStops} {t("stops")} · <Clock size={11} />~{r.totalHours}h
                     </div>
                   </div>
-                  <button className="vai-press" onClick={() => setShareTarget(r)} title={t("shareTitle")} style={{
+                  <button className="vai-press" onClick={() => setShareTarget(r)} title={t("shareTitle")} aria-label={`${t("shareTitle")} — ${tripTitle(r, t)}`} style={{
                     flexShrink: 0, background: C.goldGrad, color: C.bg, border: "none",
                     borderRadius: 12, padding: "10px 14px", fontSize: 14, fontWeight: 800,
                     cursor: "pointer", fontFamily: "inherit", boxShadow: `0 6px 16px ${C.gold}44`,

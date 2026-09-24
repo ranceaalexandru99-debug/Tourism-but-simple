@@ -627,7 +627,7 @@ export default function Route({ route, prefs, user, onBack, onUpdate, onSaved })
                             opacity: dis ? 0.35 : 1, fontFamily: "inherit",
                           }}>{lbl}</button>
                         ))}
-                        <button onClick={() => deleteStop(di, i)} style={{
+                        <button onClick={() => deleteStop(di, i)} aria-label={`${t("galDelete")} — ${stop.name}`} style={{
                           marginLeft: "auto", background: `${C.red}1c`, border: `1px solid ${C.red}55`, borderRadius: 8,
                           color: C.red, fontSize: 13, fontWeight: 700, padding: "0 14px", height: 32, cursor: "pointer", fontFamily: "inherit",
                         }}><Trash2 size={14} style={{ verticalAlign: -2 }} /></button>
@@ -687,7 +687,7 @@ export default function Route({ route, prefs, user, onBack, onUpdate, onSaved })
                         background: C.gold, border: "none", borderRadius: 8, color: C.bg, fontWeight: 700,
                         padding: "0 16px", cursor: "pointer", fontFamily: "inherit",
                       }}>{t("add")}</button>
-                      <button onClick={() => { setAddingDay(null); setNewName(""); setNewTime(""); }} style={{
+                      <button onClick={() => { setAddingDay(null); setNewName(""); setNewTime(""); }} aria-label={t("cancel")} style={{
                         background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted,
                         padding: "0 12px", cursor: "pointer", fontFamily: "inherit",
                       }}><X size={14} style={{ verticalAlign: -2 }} /></button>
