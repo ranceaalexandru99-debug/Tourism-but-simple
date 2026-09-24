@@ -25,26 +25,15 @@ import { useI18n } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
 import { getCitiesInBounds } from "../lib/destinations.js";
 import { countryName } from "../lib/countryNames.js";
-import { buildExploreMapHtml, DEFAULT_VIEW } from "../lib/exploreMapHtml.js";
+import { buildExploreMapHtml } from "../lib/exploreMapHtml.js";
+import { loadView as readView, saveView, forMap } from "../lib/exploreView.js";
+import { readMapMessage } from "../lib/mapMessage.js";
 import PoiImage from "../components/PoiImage.js";
 import { X, ArrowRight } from "../icons.js";
 
-// Remember where the user left off, so reopening Explore continues the same
-// journey instead of snapping back to a default view of Europe.
-const VIEW_KEY = "vai_explore_view";
-
-function loadView() {
-  try {
-    const v = JSON.parse(localStorage.getItem(VIEW_KEY));
-    if (Array.isArray(v?.center) && v.center.length === 2 && typeof v.zoom === "number") return v;
-  } catch { /* corrupt or absent — fall through */ }
-  return DEFAULT_VIEW;
-}
-
-// Only what the page actually draws crosses the bridge. The full record carries
-// a photo filename, a population and a country that the map has no use for, and
-// this runs on every pan.
-const forMap = (c) => ({ id: c.id, ll: c.ll, t: c.t, r: c.r });
+// Remembering the viewport, and deciding what crosses the bridge, live in
+// exploreView.js — both are worth testing and neither needs a screen.
+const loadView = () => readView(localStorage);
 
 export default function Explore({ onQuick, onClose }) {
   const { t, lang } = useI18n();
@@ -69,9 +58,9 @@ export default function Explore({ onQuick, onClose }) {
 
   const onView = useCallback(async ({ bounds, center, zoom: z }) => {
     setZoom(z);
-    try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify({ center, zoom: z }));
-    } catch { /* storage full — the map still works, it just won't be remembered */ }
+    // A full device is not worth interrupting anyone over: the map still
+    // works, it just won't reopen where they left it.
+    if (center) saveView(localStorage, { center, zoom: z });
 
     const mine = ++seqRef.current;
     setLoading(true);
@@ -90,19 +79,11 @@ export default function Explore({ onQuick, onClose }) {
   }, [post]);
 
   const onMessage = useCallback((e) => {
-    // Everything arriving here is untrusted input, even though the page is
-    // ours: it is a string from a WebView, and a malformed one must do nothing
-    // rather than throw inside a handler.
-    let msg;
-    try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
-    if (!msg || typeof msg !== "object") return;
+    // Untrusted input, even though the page is ours — see mapMessage.js.
+    const msg = readMapMessage(e.nativeEvent.data);
+    if (!msg) return;
 
-    if (msg.type === "view") {
-      const b = msg.bounds;
-      if (!b || typeof msg.zoom !== "number") return;
-      onView({ bounds: b, center: msg.center, zoom: msg.zoom });
-      return;
-    }
+    if (msg.type === "view") { onView(msg); return; }
     if (msg.type === "pick") {
       const hit = cities.find((c) => c.id === msg.id);
       if (hit) setSelected(hit);

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildExploreMapHtml, DEFAULT_VIEW, DOT, TILE_URL } from "../../mobile-native/src/lib/exploreMapHtml.js";
+import fs from "node:fs";
+import { buildMemoryMapHtml } from "../../mobile-native/src/lib/memoryMapHtml.js";
 
 // A third page built as a string for a WebView. The first one let a photo
 // caption inject script; this one is the only one that takes a stored value —
@@ -67,6 +69,45 @@ describe("buildExploreMapHtml", () => {
     // A pinch-zoom emits several moveends in a row; each one un-debounced is
     // another full filter over 5000 cities plus a bridge round-trip.
     expect(html_contains_debounce()).toBe(true);
+  });
+});
+
+describe("the WebView maps and the network", () => {
+  const pages = () => [
+    buildExploreMapHtml(DEFAULT_VIEW, colors),
+    buildMemoryMapHtml([{ id: "m1", ll: [45, 25], dataUrl: "data:image/jpeg;base64,AA" }],
+      { gold: colors.gold, card: "#162840", bg: colors.bg }),
+  ];
+
+  it("carries Leaflet itself rather than fetching it", () => {
+    // Both pages used to load leaflet from unpkg.com — a service the privacy
+    // policy never listed, and a second thing that had to be up before a map
+    // could draw. The tiles need the network; the library does not.
+    for (const html of pages()) {
+      expect(html).not.toContain("unpkg.com");
+      expect(html).toContain("L.tileLayer");   // still a real Leaflet page
+      expect(html).toContain("leaflet-container");
+    }
+  });
+
+  it("loads nothing from a remote host but the tiles", () => {
+    // A URL merely APPEARING in the page proves nothing — Leaflet's own source
+    // carries documentation links it never fetches. What matters is the tags
+    // that actually cause a request: a script with a src, or a stylesheet link.
+    // The tiles are the one deliberate exception, and they are fetched by
+    // Leaflet at runtime rather than declared here.
+    for (const html of pages()) {
+      expect(html.match(/<script[^>]+\bsrc=/gi)).toBeNull();
+      expect(html.match(/<link[^>]+\bhref=/gi)).toBeNull();
+      expect(html).toContain("basemaps.cartocdn.com");
+    }
+  });
+
+  it("declares every host it loads from in the privacy policy", () => {
+    const legal = fs.readFileSync("src/legal.js", "utf8");
+    // CARTO is the only one left. If a map ever loads from somewhere else,
+    // this is where it has to be written down.
+    expect(legal).toMatch(/CARTO/);
   });
 });
 

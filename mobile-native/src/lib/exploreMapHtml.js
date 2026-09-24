@@ -16,6 +16,8 @@
 // Messages in:  window.setCities(json) — an array of {id, ll, t, r}.
 
 import { jsonForScript } from "./shortRenderHtml.js";
+import { isView, DEFAULT_VIEW } from "./exploreView.js";
+import { LEAFLET_JS, LEAFLET_CSS } from "./leafletAsset.js";
 
 export const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
@@ -23,7 +25,9 @@ export const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{
 // lands on the town next to it.
 export const DOT = { mega: 15, major: 12, notable: 9, hidden: 7 };
 
-export const DEFAULT_VIEW = { center: [46.5, 14.0], zoom: 4 };
+// Re-exported: this module was where it lived first, and its tests read it
+// from here.
+export { DEFAULT_VIEW };
 
 /**
  * @param {{center:[number,number], zoom:number}} view  where to open
@@ -31,23 +35,19 @@ export const DEFAULT_VIEW = { center: [46.5, 14.0], zoom: 4 };
  */
 export function buildExploreMapHtml(view, colors) {
   // The stored view comes off the device and can be anything — half-written,
-  // or left by an older version. `[45]` passes an Array.isArray check and then
-  // opens the map on a grey nothing, so the length is part of the test.
-  const ok = view
-    && Array.isArray(view.center) && view.center.length === 2
-    && view.center.every((n) => typeof n === "number" && Number.isFinite(n))
-    && typeof view.zoom === "number" && Number.isFinite(view.zoom);
-  const start = ok ? { center: view.center, zoom: view.zoom } : DEFAULT_VIEW;
+  // or left by an older version — so it is checked, by the one function that
+  // decides what a usable viewport is.
+  const start = isView(view) ? { center: view.center, zoom: view.zoom } : DEFAULT_VIEW;
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>${LEAFLET_CSS}</style>
 <style>
   html,body,#m{margin:0;padding:0;height:100%;width:100%;background:${colors.bg}}
   .leaflet-container{background:${colors.bg}}
   .dot{border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.55)}
 </style>
 </head><body><div id="m"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>${LEAFLET_JS}</script>
 <script>
 const START = ${jsonForScript(start)};
 const DOT = ${jsonForScript(DOT)};

@@ -14,13 +14,18 @@ import path from "node:path";
 
 const ROOTS = ["src", "mobile-native/src"];
 const CODE = /\.(js|jsx)$/;
+// Generated files holding vendor source. leafletAsset.js is Leaflet's minified
+// build inside a string literal, and minified code is full of one-letter
+// functions called t(…) — none of which is a translation. Scanning it finds
+// only noise, and this test is worth nothing once it is ignored.
+const GENERATED = /leafletAsset\.js$/;
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       if (!/node_modules|__tests__|\.expo|dist/.test(p)) walk(p, out);
-    } else if (CODE.test(entry.name)) out.push(p);
+    } else if (CODE.test(entry.name) && !GENERATED.test(p)) out.push(p);
   }
   return out;
 }

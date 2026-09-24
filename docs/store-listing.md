@@ -160,14 +160,24 @@ caption above it. The captions live in the script, in shot order:
 
 | # | Shot | Caption |
 |---|---|---|
-| 1 | Home, with the search field | Spui unde. Primești traseul. |
-| 2 | A route, list view, day 1 visible | Pe zile, cu ore și costuri |
-| 3 | A stop sheet open, with a local tip | Fiecare oprire, cu sfatul ei |
-| 4 | The route map with every pin | Tot traseul pe hartă |
-| 5 | Gallery grid, a few photos with captions | Pozele tale, legate de locuri |
-| 6 | The finished album | Album foto, gata de tipărit |
-| 7 | The short editor, or a rendered clip | Un clip scurt din excursie |
-| 8 | Me, with the language list open | În 16 limbi, și fără internet |
+| 1 | Home, with the search field and "Explorează harta" | Spui unde. Primești traseul. |
+| 2 | Explore, zoomed on a region with several city dots | Descoperă orașe pe hartă |
+| 3 | A route, list view, day 1 visible with its weather pill | Pe zile, cu ore, vreme și costuri |
+| 4 | A stop sheet open, with a local tip | Fiecare oprire, cu sfatul ei |
+| 5 | The route map with every pin | Tot traseul pe hartă |
+| 6 | Gallery on the map tab, photo pins on the trip | Pozele tale, pe harta excursiei |
+| 7 | The finished album | Album foto, gata de tipărit |
+| 8 | The short editor, or a rendered clip | Un clip scurt din excursie |
+
+Changed from the previous set, and why: shots 2 and 6 are new screens that did
+not exist when the first list was written, and a listing that shows neither is
+selling an older app than the one on the shelf. Shot 3 now has weather in it.
+Two went to make room — the gallery grid, which shot 6 shows better, and "in 16
+languages, and offline", which is a claim the description makes in words and a
+screenshot could only illustrate weakly.
+
+The group-planning screen is deliberately NOT here. It is a local demo; putting
+it in the listing would advertise collaboration the app does not do.
 
 Two things to check before capturing: the phone is on a **saved trip with real
 photos**, not an empty state, and the status bar is not showing something you

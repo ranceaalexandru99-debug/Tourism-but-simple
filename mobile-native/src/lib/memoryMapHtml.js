@@ -12,6 +12,7 @@
 // plot, and never mounts this.
 
 import { jsonForScript } from "./shortRenderHtml.js";
+import { LEAFLET_JS, LEAFLET_CSS } from "./leafletAsset.js";
 
 export const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
@@ -25,7 +26,7 @@ export const TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{
 export function buildMemoryMapHtml(pins, colors) {
   return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>${LEAFLET_CSS}</style>
 <style>
   html,body,#m{margin:0;padding:0;height:100%;width:100%;background:${colors.bg}}
   .leaflet-container{background:${colors.bg}}
@@ -36,7 +37,7 @@ export function buildMemoryMapHtml(pins, colors) {
   .pin .fg{object-fit:contain}
 </style>
 </head><body><div id="m"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>${LEAFLET_JS}</script>
 <script>
 const PINS = ${jsonForScript(pins)};
 const send = (msg) => window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(msg));

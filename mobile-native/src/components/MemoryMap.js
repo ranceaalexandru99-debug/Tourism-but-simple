@@ -11,6 +11,7 @@ import { C, themedStyles } from "../lib/theme.js";
 import { FONT } from "../fonts.js";
 import { buildMemoryMapHtml } from "../lib/memoryMapHtml.js";
 import { toThumbnails } from "../lib/albumExport.js";
+import { readMapMessage } from "../lib/mapMessage.js";
 
 export default function MemoryMap({ memories, onPick }) {
   const [html, setHtml] = useState(null);
@@ -52,13 +53,11 @@ export default function MemoryMap({ memories, onPick }) {
         domStorageEnabled={false}
         allowFileAccess={false}
         onMessage={(e) => {
-          try {
-            const msg = JSON.parse(e.nativeEvent.data);
-            if (msg.type === "pick") {
-              const hit = geo.find((m) => m.id === msg.id);
-              if (hit) onPick?.(hit);
-            }
-          } catch { /* a message we cannot read tells us nothing */ }
+          const msg = readMapMessage(e.nativeEvent.data);
+          if (msg?.type === "pick") {
+            const hit = geo.find((m) => m.id === msg.id);
+            if (hit) onPick?.(hit);
+          }
         }}
         onError={() => setFailed(true)}
         style={{ flex: 1, backgroundColor: C.bg }}
