@@ -127,7 +127,10 @@ export async function getOffering() {
 
 /**
  * Buy a package. Resolves to true when the entitlement is active afterwards.
- * A user cancelling is not an error — it resolves false, quietly.
+ *
+ * A cancellation arrives as a THROW carrying `userCancelled`, not as a false —
+ * the SDK's own shape, left as it is so the caller can tell "changed my mind"
+ * from "the payment failed" and say different things. Paywall.js does.
  */
 export async function purchase(pkg) {
   if (!billingConfigured) throw new Error("notconfigured");
@@ -149,7 +152,17 @@ export async function restore() {
 
 // Test switch, for exercising the paid screens before billing exists. Never
 // called from a purchase flow — it grants nothing to a real user.
+//
+// The row that calls it is behind __DEV__, so it is stripped from a release
+// bundle; the function itself is an export, so Metro keeps it. A no-op outside
+// development means the bundle carries no purpose-built lever for granting the
+// entitlement, rather than one that happens to have nothing calling it.
 export function unlockForTesting(on = true) {
+  // `typeof` rather than a bare read: __DEV__ is defined by Metro and exists
+  // nowhere else, so touching it directly throws a ReferenceError under vitest.
+  // Absent means "not a React Native bundle at all" — a test — where the switch
+  // is the thing being tested. A release bundle defines it as false.
+  if (typeof __DEV__ !== "undefined" && !__DEV__) return;
   setEntitled(on);
 }
 

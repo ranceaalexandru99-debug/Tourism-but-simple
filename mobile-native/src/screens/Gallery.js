@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { View, Text, Image, Pressable, ScrollView, TextInput, Modal, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, Image, Pressable, ScrollView, FlatList, TextInput, Modal, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { useI18n, tripTitle } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
@@ -244,155 +244,172 @@ export default function Gallery({ saved }) {
 
   return (
     <>
-      <ScrollView style={styles.wrap} contentContainerStyle={{ padding: 22, paddingBottom: 30 }}>
-        <View style={styles.head}>
-          <Text style={styles.title}>{t("navGallery")}</Text>
-          <Pressable onPress={add} disabled={busy} style={styles.addBtn}>
-            <Text style={{ color: C.bg, fontFamily: FONT.extrabold, fontSize: 14 }}>{busy ? "…" : `＋ ${t("galAdd")}`}</Text>
-          </Pressable>
-        </View>
-        <Text style={{ color: C.muted, fontSize: 13, marginBottom: 14 }}>{t("gallerySub")}</Text>
-
-        {/* Album from the gallery — this is where the photos are, so it is
-            where someone thinks to turn them into something. Per trip, because
-            the day-and-stop structure comes from the itinerary. */}
-        {/* When no trip qualifies yet, say what is missing instead of hiding the
-            feature. A button that silently fails to exist is indistinguishable
-            from one that is broken — and the requirement (link photos to a
-            saved trip) is not something anyone would guess. */}
-        {memories.length > 0 && albumTrips.length === 0 && (
-          <View style={{
-            marginBottom: 18, backgroundColor: C.card, borderWidth: 1,
-            borderStyle: "dashed", borderColor: C.border, borderRadius: 14,
-            padding: 13, flexDirection: "row", gap: 10,
-          }}>
-            <Camera size={16} color={C.muted} style={{ marginTop: 2 }} />
-            <Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, flex: 1 }}>
-              {t("galAlbumNeeds", { n: MIN_PHOTOS })}
-            </Text>
+      {/* A FlatList, not a ScrollView holding every photo.
+          Each tile draws the picture TWICE — blurred behind, whole in front —
+          so a hundred memories meant two hundred mounted images, each decoded
+          whether or not it was on screen. Windowing bounds that to what is
+          actually visible. Everything above the grid is the list header, so it
+          still scrolls with the photos instead of sitting fixed. */}
+      <FlatList
+        style={styles.wrap}
+        contentContainerStyle={{ padding: 22, paddingBottom: 30 }}
+        data={view === "grid" ? memories : []}
+        keyExtractor={(m) => m.id}
+        numColumns={2}
+        columnWrapperStyle={{ gap: 12 }}
+        // A photo tile is expensive; keep few of them alive off-screen.
+        initialNumToRender={8}
+        windowSize={5}
+        removeClippedSubviews
+        ListHeaderComponent={<>
+          <View style={styles.head}>
+            <Text style={styles.title}>{t("navGallery")}</Text>
+            <Pressable onPress={add} disabled={busy} style={styles.addBtn}>
+              <Text style={{ color: C.bg, fontFamily: FONT.extrabold, fontSize: 14 }}>{busy ? "…" : `＋ ${t("galAdd")}`}</Text>
+            </Pressable>
           </View>
-        )}
+          <Text style={{ color: C.muted, fontSize: 13, marginBottom: 14 }}>{t("gallerySub")}</Text>
 
-        {albumTrips.length > 0 && (
-          <View style={{ marginBottom: 18 }}>
-            <Btn
-              icon={isPremium() ? Camera : Lock}
-              variant="soft"
-              color={C.gold}
-              disabled={albumBusy || shortPct !== null}
-              onPress={() => startFor("album")}
-            >{albumBusy ? t("albumWorking") : t("galMakeAlbum")}</Btn>
-
-            <Btn
-              icon={isPremium() ? Film : Lock}
-              variant="soft"
-              color={C.purple}
-              disabled={albumBusy || shortPct !== null}
-              onPress={() => startFor("short")}
-              style={{ marginTop: 10 }}
-            >{shortPct !== null ? `${t("shortRendering")} ${Math.round(shortPct * 100)}%` : t("shareShort")}</Btn>
-
-            {/* Encoding runs in real time, so the number moving is the only
-                thing distinguishing this from a frozen app. */}
-            {shortPct !== null && (
-              <>
-                <View style={{ height: 6, backgroundColor: C.border, borderRadius: 3, overflow: "hidden", marginTop: 10 }}>
-                  <View style={{ width: `${Math.round(shortPct * 100)}%`, height: "100%", backgroundColor: C.purple }} />
-                </View>
-                <Btn variant="ghost" color={C.muted} onPress={cancelShort} style={{ marginTop: 10 }}>{t("cancel")}</Btn>
-              </>
-            )}
-
-            {picking && albumTrips.map(({ route, count }) => (
-              <Pressable
-                key={route.id}
-                onPress={() => { setPicking(false); runPick(route); }}
-                style={{
-                  flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-                  backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
-                  borderRadius: 12, padding: 13, marginTop: 8,
-                }}
-              >
-                <Text style={{ color: C.cream, fontSize: 14, fontFamily: FONT.semibold, flex: 1 }} numberOfLines={1}>
-                  {tripTitle(route, t)}
-                </Text>
-                <Text style={{ color: C.muted, fontSize: 12, marginLeft: 10 }}>{count} {t("albumPhotos")}</Text>
-              </Pressable>
-            ))}
-
-            {!!albumMsg && (
-              <View style={{
-                marginTop: 10, backgroundColor: C.gold + "14",
-                borderWidth: 1, borderColor: C.gold + "44", borderRadius: 12, padding: 12,
-              }}>
-                <Text style={{ color: C.gold, fontSize: 13, lineHeight: 19 }}>{albumMsg}</Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        {memories.length >= GALLERY_WARN && (
-          <View style={{ backgroundColor: C.gold + "14", borderWidth: 1, borderColor: C.gold + "44", borderRadius: 14, padding: 12, marginBottom: 16 }}>
-            <View style={{ flexDirection: "row", gap: 6 }}>
-              <TriangleAlert size={14} color={C.gold} style={{ marginTop: 2 }} />
-              <Text style={{ color: C.gold, fontSize: 13, lineHeight: 19, flex: 1 }}>{t("galLimitWarn", { n: memories.length })}</Text>
+          {/* Album from the gallery — this is where the photos are, so it is
+              where someone thinks to turn them into something. Per trip, because
+              the day-and-stop structure comes from the itinerary. */}
+          {/* When no trip qualifies yet, say what is missing instead of hiding the
+              feature. A button that silently fails to exist is indistinguishable
+              from one that is broken — and the requirement (link photos to a
+              saved trip) is not something anyone would guess. */}
+          {memories.length > 0 && albumTrips.length === 0 && (
+            <View style={{
+              marginBottom: 18, backgroundColor: C.card, borderWidth: 1,
+              borderStyle: "dashed", borderColor: C.border, borderRadius: 14,
+              padding: 13, flexDirection: "row", gap: 10,
+            }}>
+              <Camera size={16} color={C.muted} style={{ marginTop: 2 }} />
+              <Text style={{ color: C.muted, fontSize: 13, lineHeight: 19, flex: 1 }}>
+                {t("galAlbumNeeds", { n: MIN_PHOTOS })}
+              </Text>
             </View>
-          </View>
-        )}
+          )}
 
-        {/* Grid or map. Offered only when there is something to plot: a photo
-            gets coordinates by being taken from a stop, so a gallery filled
-            from the Add button alone has none, and a map of it would be an
-            empty dark rectangle. */}
-        {memories.length > 0 && geoCount > 0 && (
-          <View style={styles.viewToggle}>
-            {[["grid", t("galGridView"), LayoutGrid], ["map", t("galMapView"), Map]].map(([key, label, Icon]) => (
-              <Pressable
-                key={key}
-                onPress={() => setView(key)}
-                accessibilityState={{ selected: view === key }}
-                style={[styles.viewTab, view === key && { backgroundColor: C.gold }]}
-              >
-                <Icon size={14} color={view === key ? C.bg : C.mutedLight} />
-                <Text style={{ color: view === key ? C.bg : C.mutedLight, fontFamily: FONT.bold, fontSize: 14 }}>{label}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+          {albumTrips.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Btn
+                icon={isPremium() ? Camera : Lock}
+                variant="soft"
+                color={C.gold}
+                disabled={albumBusy || shortPct !== null}
+                onPress={() => startFor("album")}
+              >{albumBusy ? t("albumWorking") : t("galMakeAlbum")}</Btn>
 
-        {memories.length === 0 ? (
-          <Pressable onPress={add} style={styles.empty}>
-            <View style={{ marginBottom: 12 }}><Camera size={48} color={C.gold} strokeWidth={1.4} /></View>
-            <Text style={{ color: C.cream, fontSize: 16, fontFamily: FONT.bold, marginBottom: 4 }}>{t("galEmpty")}</Text>
-            <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", lineHeight: 20 }}>{t("galEmptySub")}</Text>
+              <Btn
+                icon={isPremium() ? Film : Lock}
+                variant="soft"
+                color={C.purple}
+                disabled={albumBusy || shortPct !== null}
+                onPress={() => startFor("short")}
+                style={{ marginTop: 10 }}
+              >{shortPct !== null ? `${t("shortRendering")} ${Math.round(shortPct * 100)}%` : t("shareShort")}</Btn>
+
+              {/* Encoding runs in real time, so the number moving is the only
+                  thing distinguishing this from a frozen app. */}
+              {shortPct !== null && (
+                <>
+                  <View style={{ height: 6, backgroundColor: C.border, borderRadius: 3, overflow: "hidden", marginTop: 10 }}>
+                    <View style={{ width: `${Math.round(shortPct * 100)}%`, height: "100%", backgroundColor: C.purple }} />
+                  </View>
+                  <Btn variant="ghost" color={C.muted} onPress={cancelShort} style={{ marginTop: 10 }}>{t("cancel")}</Btn>
+                </>
+              )}
+
+              {picking && albumTrips.map(({ route, count }) => (
+                <Pressable
+                  key={route.id}
+                  onPress={() => { setPicking(false); runPick(route); }}
+                  style={{
+                    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+                    backgroundColor: C.card, borderWidth: 1, borderColor: C.border,
+                    borderRadius: 12, padding: 13, marginTop: 8,
+                  }}
+                >
+                  <Text style={{ color: C.cream, fontSize: 14, fontFamily: FONT.semibold, flex: 1 }} numberOfLines={1}>
+                    {tripTitle(route, t)}
+                  </Text>
+                  <Text style={{ color: C.muted, fontSize: 12, marginLeft: 10 }}>{count} {t("albumPhotos")}</Text>
+                </Pressable>
+              ))}
+
+              {!!albumMsg && (
+                <View style={{
+                  marginTop: 10, backgroundColor: C.gold + "14",
+                  borderWidth: 1, borderColor: C.gold + "44", borderRadius: 12, padding: 12,
+                }}>
+                  <Text style={{ color: C.gold, fontSize: 13, lineHeight: 19 }}>{albumMsg}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
+          {memories.length >= GALLERY_WARN && (
+            <View style={{ backgroundColor: C.gold + "14", borderWidth: 1, borderColor: C.gold + "44", borderRadius: 14, padding: 12, marginBottom: 16 }}>
+              <View style={{ flexDirection: "row", gap: 6 }}>
+                <TriangleAlert size={14} color={C.gold} style={{ marginTop: 2 }} />
+                <Text style={{ color: C.gold, fontSize: 13, lineHeight: 19, flex: 1 }}>{t("galLimitWarn", { n: memories.length })}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Grid or map. Offered only when there is something to plot: a photo
+              gets coordinates by being taken from a stop, so a gallery filled
+              from the Add button alone has none, and a map of it would be an
+              empty dark rectangle. */}
+          {memories.length > 0 && geoCount > 0 && (
+            <View style={styles.viewToggle}>
+              {[["grid", t("galGridView"), LayoutGrid], ["map", t("galMapView"), Map]].map(([key, label, Icon]) => (
+                <Pressable
+                  key={key}
+                  onPress={() => setView(key)}
+                  accessibilityState={{ selected: view === key }}
+                  style={[styles.viewTab, view === key && { backgroundColor: C.gold }]}
+                >
+                  <Icon size={14} color={view === key ? C.bg : C.mutedLight} />
+                  <Text style={{ color: view === key ? C.bg : C.mutedLight, fontFamily: FONT.bold, fontSize: 14 }}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+        </>}
+        ListEmptyComponent={
+          memories.length === 0 ? (
+            <Pressable onPress={add} style={styles.empty}>
+              <View style={{ marginBottom: 12 }}><Camera size={48} color={C.gold} strokeWidth={1.4} /></View>
+              <Text style={{ color: C.cream, fontSize: 16, fontFamily: FONT.bold, marginBottom: 4 }}>{t("galEmpty")}</Text>
+              <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", lineHeight: 20 }}>{t("galEmptySub")}</Text>
+            </Pressable>
+          ) : (
+            // The only other way the list is empty: the map tab is showing.
+            <MemoryMap memories={memories} onPick={setViewing} />
+          )
+        }
+        renderItem={({ item: m }) => (
+          <Pressable key={m.id} onPress={() => setViewing(m)} style={styles.card}>
+            {/* The whole photo, never a crop of it — the square tile with
+                resizeMode "cover" cut the top and bottom off every portrait
+                picture, which is most of them. A blurred copy of the photo
+                fills whatever its shape leaves over. */}
+            <View style={styles.thumb}>
+              <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={18} />
+              <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+            </View>
+            <View style={{ padding: 10 }}>
+              <Text style={{ color: m.caption ? C.cream : C.muted, fontSize: 14, fontFamily: FONT.semibold, fontStyle: m.caption ? "normal" : "italic" }} numberOfLines={1}>
+                {m.caption || t("galNoCaption")}
+              </Text>
+              <Text style={{ color: C.muted, fontSize: 11, marginTop: 3 }} numberOfLines={1}>
+                {m.tripTitle ? m.tripTitle : fmtDay(m.ts, lang)}
+              </Text>
+            </View>
           </Pressable>
-        ) : view === "map" ? (
-          <MemoryMap memories={memories} onPick={setViewing} />
-        ) : (
-          <View style={styles.grid}>
-            {memories.map((m) => (
-              <Pressable key={m.id} onPress={() => setViewing(m)} style={styles.card}>
-                {/* The whole photo, never a crop of it — the square tile with
-                    resizeMode "cover" cut the top and bottom off every portrait
-                    picture, which is most of them. A blurred copy of the photo
-                    fills whatever its shape leaves over. */}
-                <View style={styles.thumb}>
-                  <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={18} />
-                  <Image source={{ uri: m.uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
-                </View>
-                <View style={{ padding: 10 }}>
-                  <Text style={{ color: m.caption ? C.cream : C.muted, fontSize: 14, fontFamily: FONT.semibold, fontStyle: m.caption ? "normal" : "italic" }} numberOfLines={1}>
-                    {m.caption || t("galNoCaption")}
-                  </Text>
-                  <Text style={{ color: C.muted, fontSize: 11, marginTop: 3 }} numberOfLines={1}>
-                    {m.tripTitle ? m.tripTitle : fmtDay(m.ts, lang)}
-                  </Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
         )}
-      </ScrollView>
+      />
 
       {pending && <Compose photo={pending} saved={saved} onSave={save} onCancel={() => setPending(null)} />}
       {viewing && <Viewer memory={viewing} onClose={() => setViewing(null)} onDelete={remove} />}
@@ -438,8 +455,10 @@ const styles = themedStyles(() => StyleSheet.create({
   title: { fontFamily: FONT.display, color: C.cream, fontSize: 28, letterSpacing: -0.4 },
   addBtn: { backgroundColor: C.gold, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 15 },
   empty: { backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.gold + "55", borderStyle: "dashed", borderRadius: 20, padding: 40, alignItems: "center" },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  card: { width: "47%", flexGrow: 1, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: "hidden" },
+  // numColumns lays out the row now. maxWidth matters: with flex alone, an odd
+  // number of photos leaves the last one stretched across the full width, since
+  // it is the only thing in its row.
+  card: { flex: 1, maxWidth: "48%", marginBottom: 12, backgroundColor: C.card, borderWidth: 1, borderColor: C.border, borderRadius: 16, overflow: "hidden" },
   thumb: { width: "100%", aspectRatio: 4 / 5, backgroundColor: C.surface, overflow: "hidden" },
   backdrop: { flex: 1, backgroundColor: "#000c", justifyContent: "flex-end" },
   sheet: { backgroundColor: C.surface, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 22, paddingBottom: 30 },
