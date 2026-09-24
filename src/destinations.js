@@ -36,8 +36,16 @@ const toCity = (r) => ({
 // because the configured project does not resolve.
 //
 // So: the best-known 576 cities, built by scripts/build-fallback-index.mjs.
-// Imported LAZILY and only after a query has actually failed, so nothing is
-// added to the initial download and the happy path is untouched.
+// Imported lazily, so it is a separate chunk that no code path touches until a
+// query has actually failed.
+//
+// It is NOT free, and the first version of this comment wrongly said it was.
+// The PWA precaches every built asset, this chunk included: 25 KB gzipped,
+// 6.4% of the initial download. That was measured, and it is kept on purpose —
+// the listing promises the app works without a connection, and precaching is
+// what makes city search true offline rather than only after a lucky first
+// query. Anyone tempted to exclude it from the precache manifest is trading
+// that away for 25 KB.
 //
 // Not the whole index — that would put back most of the 216 KB the move to
 // Supabase removed. The promise here is "the cities everyone has heard of",

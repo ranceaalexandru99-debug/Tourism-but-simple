@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { C, F } from "../theme.js";
 import { useI18n } from "../i18n.js";
-import { getCitiesInBounds } from "../destinations.js";
+import { getCitiesInBounds, isDegraded } from "../destinations.js";
 import PoiImage from "../components/PoiImage.jsx";
 import { X, LocateFixed, ArrowRight, Loader } from "../icons.jsx";
 
@@ -107,11 +107,16 @@ export default function Explore({ onQuick, onClose }) {
       }, { zoom: z }).then((rows) => {
         if (mine !== seqRef.current) return;  // a newer viewport won
         setCities(rows);
-        setFailed(false);
+        // Unreachable is not the same as empty — the point this screen was
+        // built around. It no longer arrives as an exception: the lookup now
+        // falls back to the best-known cities instead of throwing, so the
+        // signal comes from isDegraded(). Without reading it, panning over a
+        // region the short list does not cover would tell the user to move the
+        // map, which could never help, forever, with nothing saying why.
+        setFailed(isDegraded());
         setLoading(false);
       }).catch(() => {
-        // Unreachable is not the same as empty. Without this the map told
-        // people to move it, which could never help, with nothing saying why.
+        // Still possible: degraded AND the fallback has nothing here either.
         if (mine !== seqRef.current) return;
         setCities([]);
         setFailed(true);

@@ -114,8 +114,11 @@ describe("the fallback index", () => {
   });
 
   it("stays small enough to be worth loading at all", () => {
-    // It is lazily imported and only after a query fails, but a fallback that
-    // costs as much as the index it replaces would defeat the move to Supabase.
+    // Lazily imported, but NOT free: the PWA precaches every built asset, so
+    // this is about 25 KB gzipped on every first visit — 6.4% of the download,
+    // measured. Kept deliberately, because it is what makes city search work
+    // offline. The ceiling exists so it cannot drift towards the 216 KB index
+    // it stands in for without someone noticing.
     const bytes = fs.statSync("src/data/fallbackCities.json").size;
     expect(bytes).toBeLessThan(120 * 1024);
   });

@@ -23,6 +23,7 @@ import {
   DEST_SCHEMA, MODEL, MAX_TOKENS, SYSTEM_PROMPT, buildPrompt, validatePrefs,
 } from "../src/shared/routeSchema.js";
 import { createRateLimiter, DEFAULT_MAX } from "./rateLimit.js";
+import { appendCapped } from "./errorLog.js";
 
 // Read .env by hand. This is a plain Node process, not a Vite one, so nothing
 // loads it automatically — without this the server started perfectly happily
@@ -150,11 +151,11 @@ app.post("/api/errors", (req, res) => {
 
   // One JSON object per line: appendable without reading, greppable, and it
   // cannot be corrupted by two writes racing the way a JSON array would be.
-  try {
-    fs.mkdirSync(path.dirname(ERROR_LOG), { recursive: true });
-    fs.appendFileSync(ERROR_LOG, JSON.stringify(entry) + "\n");
-  } catch (err) {
-    console.error("[api] could not write the error log:", err.message);
+  // Capped and rotated: this endpoint is unauthenticated, and an unbounded
+  // file that anyone can append to eventually fills the disk — which would
+  // take trip generation and account deletion down with it.
+  if (appendCapped(ERROR_LOG, JSON.stringify(entry)) === "failed") {
+    console.error("[api] could not write the error log");
   }
   console.error(`[app-error] ${entry.kind} ${entry.platform} ${entry.appVersion}: ${entry.message}`);
 
