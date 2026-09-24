@@ -2153,6 +2153,26 @@ const EXPLORE_I18N = {
 };
 for (const code in EXPLORE_I18N) Object.assign(T[code], EXPLORE_I18N[code]);
 
+const STORAGE_I18N = {
+  en: { storageFull: "Storage full — the trip was not saved. Free up space and try again." },
+  ro: { storageFull: "Memorie plină — excursia nu a fost salvată. Eliberează spațiu și încearcă din nou." },
+  fr: { storageFull: "Stockage plein — le voyage n'a pas été enregistré. Libère de l'espace et réessaie." },
+  es: { storageFull: "Almacenamiento lleno — el viaje no se guardó. Libera espacio e inténtalo de nuevo." },
+  it: { storageFull: "Memoria piena — il viaggio non è stato salvato. Libera spazio e riprova." },
+  de: { storageFull: "Speicher voll — die Reise wurde nicht gespeichert. Schaffe Platz und versuche es erneut." },
+  pl: { storageFull: "Brak miejsca — wyjazd nie został zapisany. Zwolnij miejsce i spróbuj ponownie." },
+  ru: { storageFull: "Память заполнена — поездка не сохранена. Освободите место и повторите." },
+  zh: { storageFull: "存储空间已满 — 行程未保存。请清理空间后重试。" },
+  ja: { storageFull: "空き容量がありません — 旅程は保存されませんでした。空き容量を作って再試行してください。" },
+  pt: { storageFull: "Armazenamento cheio — a viagem não foi guardada. Liberta espaço e tenta de novo." },
+  nl: { storageFull: "Opslag vol — de reis is niet opgeslagen. Maak ruimte vrij en probeer opnieuw." },
+  tr: { storageFull: "Depolama dolu — gezi kaydedilmedi. Yer açıp tekrar dene." },
+  el: { storageFull: "Ο χώρος γέμισε — το ταξίδι δεν αποθηκεύτηκε. Ελευθέρωσε χώρο και δοκίμασε ξανά." },
+  uk: { storageFull: "Пам'ять заповнена — подорож не збережено. Звільни місце і спробуй ще раз." },
+  ko: { storageFull: "저장 공간이 가득 찼어요 — 여행이 저장되지 않았습니다. 공간을 확보한 뒤 다시 시도해 주세요." },
+};
+for (const code in STORAGE_I18N) Object.assign(T[code], STORAGE_I18N[code]);
+
 export function tStatic(key) {
   const dict = T[getLang()] || T.en;
   return dict[key] ?? T.en[key] ?? key;

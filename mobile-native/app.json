@@ -39,15 +39,23 @@
         "backgroundColor": "#FBFAF7"
       },
       "permissions": [
-        "CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.INTERNET"
+      ],
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
     "plugins": [
       [
         "expo-image-picker",
         {
-          "photosPermission": "Turism, dar simplu! lets you pick photos to add to your trip gallery.",
-          "cameraPermission": "Turism, dar simplu! uses the camera to photograph attractions for your trip gallery."
+          "cameraPermission": "Turism, dar simplu! uses the camera to photograph attractions for your trip gallery.",
+          "microphonePermission": false,
+          "photosPermission": false
         }
       ]
     ],

@@ -58,12 +58,50 @@ Data Safety form.
 
 ## Permissions
 
-`CAMERA` is the only one declared (`app.json`). The rationale strings are in the
-`expo-image-picker` plugin config and are what the OS shows in the prompt.
+**Read the generated manifest, not `app.json`.** This section used to say
+"CAMERA is the only one declared", which was true of the config and false of
+the app. Libraries contribute permissions through manifest merging, and
+`expo-image-picker`'s plugin adds `RECORD_AUDIO` unless explicitly told not to.
+The first measurement of a real manifest found the app asking for the
+**microphone**, external storage read and write, and permission to **draw over
+other apps** — none of them used by anything.
+
+What ships now, measured:
+
+| Permission | Why |
+|---|---|
+| `CAMERA` | Photographing a stop. The one the app actually prompts for. |
+| `INTERNET` | Every network call. |
+| `VIBRATE` | React Native core. No prompt, nothing on the Data Safety form. |
+
+Blocked in `app.json` via `android.blockedPermissions`, plus
+`microphonePermission: false` and `photosPermission: false` on the picker
+plugin:
+
+| Blocked | Why it appeared | Why it is not needed |
+|---|---|---|
+| `RECORD_AUDIO` | expo-image-picker's plugin, by default | Nothing records audio |
+| `READ_EXTERNAL_STORAGE` | the picker package's own manifest | Every photo comes from the camera |
+| `WRITE_EXTERNAL_STORAGE` | same | Photos go to the app's document directory |
+| `SYSTEM_ALERT_WINDOW` | Expo's template, for the dev menu | Nothing draws overlays |
+
+`src/__tests__/nativeConfig.test.js` asserts each of these. If a development
+build's error overlay ever stops appearing, `SYSTEM_ALERT_WINDOW` is why.
+
+To check again after adding any dependency — this is the only answer that
+counts, and it takes a minute:
+
+```bash
+cd mobile-native && npx expo prebuild --platform android --no-install --clean && grep -o 'android:name="android.permission[^"]*"[^/]*' android/app/src/main/AndroidManifest.xml | sort -u
+```
+
+Anything without `tools:node="remove"` is a permission the app ships. Delete
+the generated `android/` folder afterwards (it is not gitignored) and restore
+`mobile-native/package.json`, which prebuild rewrites to `expo run:android`.
 
 Note: picking from the photo library on Android 13+ uses the Photo Picker, which
-needs no permission. If a future change adds `READ_MEDIA_IMAGES`, Play will ask
-for a declaration form — worth avoiding.
+needs no permission. The app does not offer it at all — every `pickPhoto` call
+asks for the camera — which is why `photosPermission` is off.
 
 ## Before the first upload
 

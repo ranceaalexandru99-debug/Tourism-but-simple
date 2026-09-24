@@ -101,6 +101,11 @@ export default function Explore({ onQuick, onClose }) {
         ref={webRef}
         source={{ html }}
         originWhitelist={["*"]}
+        // These pages are built here and loaded as raw HTML; none of them has
+        // anywhere to navigate TO. Refusing every top-level navigation means a
+        // link that appears in one later — or a redirect from something it
+        // loads — cannot turn the WebView into an uncontrolled browser.
+        onShouldStartLoadWithRequest={(req) => req.url === "about:blank"}
         javaScriptEnabled
         domStorageEnabled={false}
         allowFileAccess={false}

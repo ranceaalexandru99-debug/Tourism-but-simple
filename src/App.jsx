@@ -7,7 +7,7 @@ import { useI18n } from "./i18n.js";
 import { useOnline } from "./useOnline.js";
 import { decodeSharedRouteFromHash } from "./shareCodec.js";
 import Hint, { hasSeenHint } from "./components/Hint.jsx";
-import { persist } from "./storage.js";
+import { persist } from "./shared/persist.js";
 import lazyWithRetry, { clearChunkReloadGuard } from "./lazyWithRetry.js";
 import { clearCrashStreak } from "./components/ErrorBoundary.jsx";
 

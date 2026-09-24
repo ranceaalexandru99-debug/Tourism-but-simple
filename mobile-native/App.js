@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
@@ -7,11 +7,12 @@ import { useFonts } from "expo-font";
 import { hydrate } from "./src/polyfill.js";
 import { installMonitor } from "./src/lib/monitor.js";
 import { initPremium } from "./src/lib/premium.js";
-import { FONT_MAP } from "./src/fonts.js";
+import { FONT_MAP, FONT } from "./src/fonts.js";
 import { ThemeProvider, useTheme, C } from "./src/lib/theme.js";
-import { I18nProvider } from "./src/lib/i18n.js";
+import { I18nProvider, useI18n } from "./src/lib/i18n.js";
 import { generateRoute } from "./src/lib/mockEngine.js";
 import ErrorBoundary from "./src/components/ErrorBoundary.js";
+import { persist } from "./src/shared/persist.js";
 
 // Global crash visibility from the first moment of boot.
 installMonitor();
@@ -31,6 +32,7 @@ import Explore from "./src/screens/Explore.js";
 import BottomNav from "./src/components/BottomNav.js";
 import ConsentBanner from "./src/components/ConsentBanner.js";
 import { currentUser, clearSession } from "./src/lib/auth.js";
+import { TriangleAlert } from "./src/icons.js";
 
 const SAVED_KEY = "vai_saved_routes";
 const LAST_KEY = "vai_last_opened";
@@ -40,6 +42,7 @@ const TABS = ["home", "trips", "gallery", "me"];
 
 function Root() {
   const { mode } = useTheme();
+  const { t } = useI18n();
   const restored = currentUser(); // restore a prior session (localStorage hydrated by now)
   const [screen, setScreen] = useState("splash");
   const [user, setUser] = useState(restored);
@@ -53,7 +56,14 @@ function Root() {
   const [route, setRoute] = useState(null);
   const [lastOpenedId, setLastOpenedId] = useState(() => { try { return localStorage.getItem(LAST_KEY); } catch { return null; } });
 
-  useEffect(() => { try { localStorage.setItem(SAVED_KEY, JSON.stringify(saved)); } catch {} }, [saved]);
+  // Trips go through persist(), which discards disposable caches rather than
+  // the user's trip, and reports whether the write actually landed. It was a
+  // bare try/catch here: storage fills with cached photos (photos.js writes
+  // base64 into it), the write failed, the app still showed the trip as saved,
+  // and it was gone on the next launch with nothing ever having said so. The
+  // web app was fixed for exactly this; the fix had never crossed over.
+  const [saveFailed, setSaveFailed] = useState(false);
+  useEffect(() => { setSaveFailed(!persist(SAVED_KEY, JSON.stringify(saved))); }, [saved]);
 
   const go = (s) => setScreen(s);
 
@@ -114,6 +124,15 @@ function Root() {
           was always false — white status icons on a white bar for every user
           on the default theme. */}
       <StatusBar style={mode === "light" ? "dark" : "light"} />
+      {/* Storage full, and even discarding every cache did not free enough.
+          Saying so is the whole point: the silence let someone believe a trip
+          was saved when it was not. */}
+      {saveFailed && (
+        <View style={{ backgroundColor: C.red, paddingVertical: 5, paddingHorizontal: 8, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}>
+          <TriangleAlert size={12} color="#fff" />
+          <Text style={{ color: "#fff", fontSize: 12, fontFamily: FONT.bold, textAlign: "center" }}>{t("storageFull")}</Text>
+        </View>
+      )}
       <View style={{ flex: 1, ...pad }}>
         {screen === "splash" && <Splash onDone={() => go(user ? "home" : "welcome")} />}
         {screen === "welcome" && <Welcome onDone={() => go("auth")} />}
