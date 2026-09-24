@@ -2173,6 +2173,27 @@ const STORAGE_I18N = {
 };
 for (const code in STORAGE_I18N) Object.assign(T[code], STORAGE_I18N[code]);
 
+// Choosing where a photo comes from, merged into the dictionaries above.
+const PHOTO_SRC_I18N = {
+  en: { galFromCamera: "Take a photo", galFromLibrary: "Choose from gallery" },
+  ro: { galFromCamera: "Fă o poză", galFromLibrary: "Alege din galerie" },
+  fr: { galFromCamera: "Prendre une photo", galFromLibrary: "Choisir dans la galerie" },
+  es: { galFromCamera: "Hacer una foto", galFromLibrary: "Elegir de la galería" },
+  it: { galFromCamera: "Scatta una foto", galFromLibrary: "Scegli dalla galleria" },
+  de: { galFromCamera: "Foto aufnehmen", galFromLibrary: "Aus der Galerie wählen" },
+  pt: { galFromCamera: "Tirar uma foto", galFromLibrary: "Escolher da galeria" },
+  nl: { galFromCamera: "Foto maken", galFromLibrary: "Kies uit galerij" },
+  pl: { galFromCamera: "Zrób zdjęcie", galFromLibrary: "Wybierz z galerii" },
+  ru: { galFromCamera: "Сделать фото", galFromLibrary: "Выбрать из галереи" },
+  zh: { galFromCamera: "拍照", galFromLibrary: "从相册选择" },
+  ja: { galFromCamera: "写真を撮る", galFromLibrary: "ライブラリから選ぶ" },
+  tr: { galFromCamera: "Fotoğraf çek", galFromLibrary: "Galeriden seç" },
+  el: { galFromCamera: "Τράβα μια φωτογραφία", galFromLibrary: "Επίλεξε από τη συλλογή" },
+  uk: { galFromCamera: "Зробити фото", galFromLibrary: "Вибрати з галереї" },
+  ko: { galFromCamera: "사진 촬영", galFromLibrary: "갤러리에서 선택" },
+};
+for (const code in PHOTO_SRC_I18N) Object.assign(T[code], PHOTO_SRC_I18N[code]);
+
 export function tStatic(key) {
   const dict = T[getLang()] || T.en;
   return dict[key] ?? T.en[key] ?? key;

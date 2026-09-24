@@ -21,6 +21,7 @@ import { MIN_PHOTOS } from "../lib/album.js";
 import ShortRenderer from "../components/ShortRenderer.js";
 import ShortEditor from "../components/ShortEditor.js";
 import { listMemories, pickPhoto, addMemory } from "../lib/gallery.js";
+import { choosePhotoSource } from "../lib/photoSource.js";
 import {
   Star, Clock, Ticket, Lightbulb, NotebookPen, Map, Navigation, Check,
   MapPin, Footprints, Save, PartyPopper, Share2, MessagesSquare, Hand, Heart,
@@ -76,9 +77,13 @@ function StopDetail({ stop, prev, destName, route, onClose, onToggleDone, onRate
   // stop in an album either.
   const [photo, setPhoto] = useState("idle");
   const takePhoto = async () => {
+    // A photo for THIS stop can equally be one already on the phone — taken
+    // minutes ago, with the camera app, standing in front of the place.
+    const source = await choosePhotoSource(t);
+    if (!source) return;
     setPhoto("saving");
     try {
-      const uri = await pickPhoto(true);
+      const uri = await pickPhoto(source === "camera");
       if (uri === "denied") { setPhoto("idle"); Alert.alert(t("galAddPhoto"), t("galPermDenied")); return; }
       if (!uri) { setPhoto("idle"); return; }
       const ok = addMemory({

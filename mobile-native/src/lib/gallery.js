@@ -35,17 +35,35 @@ const persist = (list) => {
   try { localStorage.setItem(KEY, JSON.stringify(list)); return true; } catch { return false; }
 };
 
-// Launch the camera (or library) and return a durable photo path.
+// Launch the camera, or the photo library, and return a durable photo path.
 // Returns null when the user cancels, or "denied" when permission is refused —
 // distinct so the caller can explain itself instead of appearing to do nothing.
+//
+// Only the camera asks for anything. The library deliberately does NOT call
+// requestMediaLibraryPermissionsAsync: read the module's own Android source and
+// launchImageLibraryAsync checks no permission at all, while the request
+// resolves to an empty permission set on Android 13 and above. Below that it
+// would ask for READ/WRITE_EXTERNAL_STORAGE — permissions this app blocks,
+// because the picker hands back a URI it has already granted access to and
+// nothing here ever reads the storage directly.
+//
+// So asking would have achieved one thing: a refusal on old phones for a
+// permission the operation does not need.
 export async function pickPhoto(fromCamera = true) {
-  const perm = fromCamera
-    ? await ImagePicker.requestCameraPermissionsAsync()
-    : await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!perm.granted) return "denied";
-  const res = fromCamera
-    ? await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false })
-    : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsEditing: false });
+  if (fromCamera) {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) return "denied";
+  }
+  let res;
+  try {
+    res = fromCamera
+      ? await ImagePicker.launchCameraAsync({ quality: 0.7, allowsEditing: false })
+      : await ImagePicker.launchImageLibraryAsync({ quality: 0.7, allowsEditing: false });
+  } catch {
+    // No picker activity, or the OS refused to open one. Treated as a cancel:
+    // the caller has nothing better to offer than letting the user try again.
+    return null;
+  }
   if (res.canceled || !res.assets || res.assets.length === 0) return null;
   return persistPhotoFile(res.assets[0].uri);
 }

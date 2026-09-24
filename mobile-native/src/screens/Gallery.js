@@ -5,6 +5,7 @@ import { useI18n, tripTitle } from "../lib/i18n.js";
 import { FONT } from "../fonts.js";
 import { Btn } from "../components/ui.js";
 import { pickPhoto, listMemories, addMemory, deleteMemory } from "../lib/gallery.js";
+import { choosePhotoSource } from "../lib/photoSource.js";
 import { MIN_PHOTOS } from "../lib/album.js";
 import { exportAlbumPdf, buildShortPayload, buildShortScenes, shareShort } from "../lib/albumExport.js";
 import { isPremium, usePremium } from "../lib/premium.js";
@@ -219,9 +220,13 @@ export default function Gallery({ saved }) {
   };
 
   const add = async () => {
+    // Asked before the busy flag: the alert is the user deciding, not the app
+    // working, and a spinner under it would be a lie about what is happening.
+    const source = await choosePhotoSource(t);
+    if (!source) return;
     setBusy(true);
     try {
-      const uri = await pickPhoto(true);
+      const uri = await pickPhoto(source === "camera");
       // Refusing the camera permission used to look like a dead button.
       if (uri === "denied") Alert.alert(t("galAddPhoto"), t("galPermDenied"));
       else if (uri) setPending(uri);

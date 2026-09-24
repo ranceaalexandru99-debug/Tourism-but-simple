@@ -51,7 +51,7 @@ PLANIFICARE
 • Recapitulare la final: cât ai mers, ce ai văzut, ce ți-a plăcut
 
 AMINTIRI
-• Galerie de poze legate de excursie și de oprire
+• Galerie de poze legate de excursie și de oprire — fotografiezi pe loc sau alegi din galeria telefonului
 
 EXTRA (deblocare unică, opțională)
 • Album foto ca PDF: fiecare poză așezată sub ziua și locul ei, pe o singură pagină, de tipărit sau trimis
@@ -107,7 +107,7 @@ WHILE YOU TRAVEL
 • A recap at the end: how far you walked, what you saw, what you liked
 
 WHAT YOU BRING HOME
-• A photo gallery tied to the trip and the stop
+• A photo gallery tied to the trip and the stop — shoot on the spot, or pick a photo you already have
 
 EXTRAS (one-off unlock, optional)
 • A photo album as a PDF: every picture filed under the day and place you took it, laid out on a single page to print or send

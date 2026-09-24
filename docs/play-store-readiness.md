@@ -99,9 +99,20 @@ Anything without `tools:node="remove"` is a permission the app ships. Delete
 the generated `android/` folder afterwards (it is not gitignored) and restore
 `mobile-native/package.json`, which prebuild rewrites to `expo run:android`.
 
-Note: picking from the photo library on Android 13+ uses the Photo Picker, which
-needs no permission. The app does not offer it at all — every `pickPhoto` call
-asks for the camera — which is why `photosPermission` is off.
+### Picking from the photo library
+
+The app offers it, and still asks for no permission. That is not an oversight —
+it is what `expo-image-picker` 17's own Android source does:
+
+- `launchImageLibraryAsync` checks no permission at all before launching;
+- `requestMediaLibraryPermissionsAsync` returns an **empty** permission set on
+  Android 13+ (`Build.VERSION_CODES.TIRAMISU`), and below that asks for
+  `READ`/`WRITE_EXTERNAL_STORAGE` — the two blocked above.
+
+So calling it would achieve exactly one thing: a refusal on an old phone, for a
+permission the operation does not need. `pickPhoto()` therefore asks only for
+the camera, and `photosPermission` stays off. The picker hands back a URI it has
+already granted access to; nothing in the app reads device storage directly.
 
 ## Before the first upload
 

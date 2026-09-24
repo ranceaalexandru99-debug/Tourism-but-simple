@@ -42,14 +42,27 @@ describe("Android permissions", () => {
     expect(blocked.has("android.permission.CAMERA")).toBe(false);
   });
 
-  it("does not promise photo-library access it never uses", () => {
-    // Every call is pickPhoto(true) — the camera. The permission dialog used to
-    // say the app "lets you pick photos", which was a promise nothing kept.
+  it("picks from the library without asking for a permission", () => {
+    // The app does offer the gallery now, and still needs no permission for it.
+    // Measured in expo-image-picker's Android source: launchImageLibraryAsync
+    // checks nothing, and requestMediaLibraryPermissionsAsync resolves to an
+    // empty set on Android 13+. Below that it would ask for the storage
+    // permissions blocked above — a refusal for something not required.
     expect(picker?.[1]?.photosPermission).toBe(false);
-    const uses = ["mobile-native/src/screens/Gallery.js", "mobile-native/src/screens/Route.js"]
-      .flatMap((f) => [...fs.readFileSync(f, "utf8").matchAll(/pickPhoto\((\w*)\)/g)].map((m) => m[1]));
-    expect(uses.length).toBeGreaterThan(0);
-    for (const arg of uses) expect(arg).toBe("true");
+
+    // A CALL, not a mention: the comment explaining why it is absent names it.
+    const lib = fs.readFileSync("mobile-native/src/lib/gallery.js", "utf8");
+    expect(lib).not.toMatch(/ImagePicker\.requestMediaLibraryPermissionsAsync\s*\(/);
+    expect(lib).toMatch(/ImagePicker\.requestCameraPermissionsAsync\s*\(/);
+  });
+
+  it("lets the user choose where a photo comes from", () => {
+    // Both entry points ask first, rather than assuming the camera.
+    for (const f of ["mobile-native/src/screens/Gallery.js", "mobile-native/src/screens/Route.js"]) {
+      const src = fs.readFileSync(f, "utf8");
+      expect(src).toContain("choosePhotoSource");
+      expect(src).toMatch(/pickPhoto\(source === "camera"\)/);
+    }
   });
 });
 
