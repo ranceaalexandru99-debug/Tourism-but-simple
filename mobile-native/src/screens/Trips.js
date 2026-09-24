@@ -68,7 +68,15 @@ export default function Trips({ saved, onOpen, onDelete, onRestore }) {
                   </View>
                 </Pressable>
                 {onDelete && (
-                  <Pressable onPress={() => setConfirmId(r.id)} hitSlop={8} style={{ paddingHorizontal: 6 }}>
+                  <Pressable
+                    onPress={() => setConfirmId(r.id)}
+                    hitSlop={8}
+                    style={{ paddingHorizontal: 6 }}
+                    // Icon only, so there is no text for a screen reader to
+                    // read: without this it announces "button" and nothing
+                    // else, next to a trip it will not name either.
+                    accessibilityLabel={`${t("galDelete")} — ${tripTitle(r, t)}`}
+                  >
                     <Trash2 size={17} color={C.muted} />
                   </Pressable>
                 )}

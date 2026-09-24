@@ -14,12 +14,13 @@
 // getHiddenGems / getEuropeWeekend were already async, and nameMatchesCity
 // stays a synchronous pure function.
 
-import { lonRanges, tiersForZoom, usableBounds } from "./shared/cityBounds.js";
+import { lonRanges, tiersForZoom, usableBounds, selectCitiesInBounds } from "./shared/cityBounds.js";
+import { normalize, aliasTargets, searchLocal } from "./shared/citySearch.js";
 import { supabase } from "./lib/supabaseClient.js";
 
-// Must match migrate-cities-to-supabase.mjs, which writes cities.name_norm with
-// this exact transform. If the two drift, searches stop matching.
-const normalize = (s) => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+// Re-exported: every caller has always imported it from here, and it is the
+// same pure function on both platforms now.
+export { nameMatchesCity } from "./shared/citySearch.js";
 
 // Row → the compact shape the rest of the app already speaks.
 const toCity = (r) => ({
@@ -27,6 +28,36 @@ const toCity = (r) => ({
   p: r.population ?? undefined, r: r.rank, co: r.continent, t: r.tier,
   img: r.img ?? undefined,
 });
+
+// ---- fallback --------------------------------------------------------------
+// When the database cannot be reached, three features return nothing and say
+// nothing: city suggestions, the Home rails and the explore map. The user sees
+// an app that appears to know no cities at all — which is what happens today,
+// because the configured project does not resolve.
+//
+// So: the best-known 576 cities, built by scripts/build-fallback-index.mjs.
+// Imported LAZILY and only after a query has actually failed, so nothing is
+// added to the initial download and the happy path is untouched.
+//
+// Not the whole index — that would put back most of the 216 KB the move to
+// Supabase removed. The promise here is "the cities everyone has heard of",
+// which is the right promise for a degraded mode.
+let fallbackPromise = null;
+function loadFallback() {
+  if (!fallbackPromise) {
+    fallbackPromise = import("./data/fallbackCities.json")
+      .then((m) => m.default)
+      // A fallback that fails to load must not become a second error the
+      // caller has to handle. An empty list degrades to today's behaviour.
+      .catch(() => []);
+  }
+  return fallbackPromise;
+}
+
+// Whether the last attempt to reach the database failed. Only used to decide
+// whether it is worth telling the user the list is a short one.
+let degraded = !supabase;
+export const isDegraded = () => degraded;
 
 // ---- cache -----------------------------------------------------------------
 // Small, bounded, and explicitly best-effort: a cache miss costs a round-trip,
@@ -64,57 +95,24 @@ function cachePut(key, value) {
 
 // Run a query, serving (and refreshing) the cache around it. On a network
 // failure a stale-but-usable cached answer beats an empty screen.
-async function cached(key, run) {
+async function cached(key, run, fallback) {
   const hit = cacheGet(key);
   if (hit) return hit;
-  if (!supabase) return [];
+  // An empty result here is indistinguishable from "we know no cities", so
+  // every path that cannot reach the database goes through the fallback.
+  if (!supabase) { degraded = true; return fallback ? fallback(await loadFallback()) : []; }
   try {
     const rows = await run();
     const value = (rows || []).map(toCity);
     if (value.length) cachePut(key, value);
+    degraded = false;
     return value;
   } catch {
-    return cacheGet(key) || [];
+    degraded = true;
+    const stale = cacheGet(key);
+    if (stale) return stale;
+    return fallback ? fallback(await loadFallback()) : [];
   }
-}
-
-// ---- aliases ---------------------------------------------------------------
-// Endonyms and common exonyms → the English names Wikidata uses. Kept on the
-// client (it is a couple of hundred bytes) so a typed "București" is translated
-// to "Bucharest" BEFORE the query goes out — the database only stores the
-// canonical name.
-const ALIASES = {
-  bucuresti: "Bucharest", londra: "London", viena: "Vienna", praga: "Prague",
-  varsovia: "Warsaw", moscova: "Moscow", atena: "Athens", lisabona: "Lisbon",
-  copenhaga: "Copenhagen", venetia: "Venice", florenta: "Florence",
-  neapole: "Naples", cracovia: "Kraków", budapesta: "Budapest", belgrad: "Belgrade",
-  kiev: "Kyiv", "sankt petersburg": "Saint Petersburg", ierusalim: "Jerusalem",
-  tokio: "Tokyo", seul: "Seoul", marsilia: "Marseille", nisa: "Nice",
-  colonia: "Cologne", geneva: "Geneva", haga: "The Hague", anvers: "Antwerp",
-  damasc: "Damascus", bagdad: "Baghdad", teheran: "Tehran", alger: "Algiers",
-  salonic: "Thessaloniki", sevilia: "Seville", torino: "Turin", milano: "Milan",
-  genova: "Genoa", zurich: "Zurich", munchen: "Munich", edinburg: "Edinburgh",
-  wien: "Vienna", praha: "Prague", warszawa: "Warsaw", moskva: "Moscow",
-  athina: "Athens", lisboa: "Lisbon", kobenhavn: "Copenhagen", venezia: "Venice",
-  firenze: "Florence", napoli: "Naples", krakau: "Kraków", beograd: "Belgrade",
-  muenchen: "Munich", koln: "Cologne", "den haag": "The Hague", antwerpen: "Antwerp",
-  gent: "Ghent", sevilla: "Seville", roma: "Rome",
-  londres: "London", vienne: "Vienna", varsovie: "Warsaw", moscou: "Moscow",
-  athenes: "Athens", lisbonne: "Lisbon", venise: "Venice", napoles: "Naples",
-  edimburgo: "Edinburgh", mailand: "Milan", genf: "Geneva", ginevra: "Geneva",
-};
-
-// Either the user is still typing the alias ("bucu" → "bucuresti"), or it
-// appears as a whole word at the start ("roma 2 zile"). The trailing boundary
-// matters: a bare prefix test made "românia" match "roma" and return Rome.
-function queryHitsAlias(query, key) {
-  if (key.startsWith(query)) return true;
-  return query === key || query.startsWith(key + " ");
-}
-function aliasTargets(query) {
-  const out = [];
-  for (const key in ALIASES) if (queryHitsAlias(query, key)) out.push(normalize(ALIASES[key]));
-  return out;
 }
 
 // ---- public API ------------------------------------------------------------
@@ -127,7 +125,6 @@ const likePattern = (p) => `name_norm.like."${p.replace(/"/g, '\\"')}"`;
 export async function searchDestinations(q, n = 8) {
   const query = normalize(q).trim();
   if (query.length < 2) return [];
-  if (!supabase) return [];
 
   const targets = [query, ...aliasTargets(query)];
   const key = `s:${targets.join("|")}:${n}`;
@@ -155,21 +152,10 @@ export async function searchDestinations(q, n = 8) {
     }).filter((x) => x.best > 0);
     scored.sort((a, b) => b.best - a.best);
     return scored.slice(0, n).map((x) => x.row);
-  });
-}
-
-// Does this typed name refer to this city? Strict, synchronous, and pure — the
-// route tiers call it to decide whether a search hit is really what the user
-// asked for.
-export function nameMatchesCity(query, city) {
-  const q = normalize(query);
-  const name = normalize(city.n);
-  const startsWithWord = (w) => q === w || q.startsWith(w + " ");
-  if (startsWithWord(name)) return true;
-  for (const key in ALIASES) {
-    if (normalize(ALIASES[key]) === name && startsWithWord(key)) return true;
-  }
-  return false;
+  // The fallback is already in the compact shape, so it skips toCity — hence
+  // searchLocal rather than a second copy of the ranking above. It is the same
+  // ranking: the shared module is where that rule now lives.
+  }, (cities) => searchLocal(cities, q, n));
 }
 
 // ---- Home rails ------------------------------------------------------------
@@ -194,7 +180,7 @@ export async function getTrending(n = 6) {
       .in("tier", ["mega", "major"]).order("rank", { ascending: false }).limit(RAIL_POOL);
     if (error) throw error;
     return data;
-  });
+  }, (cities) => cities.filter((c) => c.t === "mega" || c.t === "major").slice(0, RAIL_POOL));
   return shuffle(pool).slice(0, n);
 }
 
@@ -205,7 +191,10 @@ export async function getHiddenGems(n = 6) {
       .order("rank", { ascending: false }).limit(RAIL_POOL);
     if (error) throw error;
     return data;
-  });
+  // The fallback carries no "notable" cities at all — it is mega and major
+  // only. An empty rail is correct here: inventing hidden gems out of the most
+  // famous cities in the world would be the opposite of what the rail promises.
+  }, () => []);
   return shuffle(pool).slice(0, n);
 }
 
@@ -216,7 +205,7 @@ export async function getEuropeWeekend(n = 6) {
       .order("rank", { ascending: false }).limit(RAIL_POOL);
     if (error) throw error;
     return data;
-  });
+  }, (cities) => cities.filter((c) => c.co === "EU").slice(0, RAIL_POOL));
   return shuffle(pool).slice(0, n);
 }
 
@@ -236,7 +225,11 @@ export { lonRanges, tiersForZoom, usableBounds } from "./shared/cityBounds.js";
 // rectangle would fill localStorage with near-duplicates. The queries are small
 // and indexed; panning stays cheap.
 export async function getCitiesInBounds(bounds, { zoom = 6, limit = 120 } = {}) {
-  if (!supabase || !usableBounds(bounds)) return [];
+  if (!usableBounds(bounds)) return [];
+  if (!supabase) {
+    degraded = true;
+    return selectCitiesInBounds(await loadFallback(), bounds, { zoom, limit });
+  }
   const { south, west, north, east } = bounds;
 
   const query = (w, e) => supabase
@@ -254,7 +247,15 @@ export async function getCitiesInBounds(bounds, { zoom = 6, limit = 120 } = {}) 
   // forever, with nothing saying why. The caller decides what to show.
   const results = await Promise.all(lonRanges(west, east).map(([w, e]) => query(w, e)));
   const failed = results.find((r) => r.error);
-  if (failed) throw new Error(failed.error.message || "query_failed");
+  if (failed) {
+    // Showing the best-known cities beats showing a map that says the world is
+    // empty. The screen still learns it is degraded, via isDegraded().
+    degraded = true;
+    const fb = selectCitiesInBounds(await loadFallback(), bounds, { zoom, limit });
+    if (fb.length) return fb;
+    throw new Error(failed.error.message || "query_failed");
+  }
+  degraded = false;
 
   return results
     .flatMap((r) => r.data || [])
@@ -271,6 +272,6 @@ export async function getByContinent(code, n = 10) {
       .order("rank", { ascending: false }).limit(RAIL_POOL);
     if (error) throw error;
     return data;
-  });
+  }, (cities) => cities.filter((c) => c.co === code).slice(0, RAIL_POOL));
   return shuffle(pool).slice(0, n);
 }

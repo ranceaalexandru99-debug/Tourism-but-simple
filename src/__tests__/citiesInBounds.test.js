@@ -42,18 +42,36 @@ describe("getCitiesInBounds", () => {
     await expect(getCitiesInBounds(bounds, { zoom: 6 })).resolves.toEqual([]);
   });
 
-  it("THROWS when the query fails, rather than looking like an empty area", async () => {
-    const { getCitiesInBounds } = await load({ data: null, error: { message: "network" } });
-    await expect(getCitiesInBounds(bounds, { zoom: 6 })).rejects.toThrow("network");
+  // These two used to assert that a failed query throws and an absent backend
+  // returns [] — the point being that "unreachable" must never look like
+  // "empty here". That point still stands; what changed is the answer. The map
+  // now falls back to the best-known cities, and the screen learns it is
+  // degraded from isDegraded() rather than from an exception.
+  //
+  // The old behaviour is what the app does today, with a Supabase project that
+  // does not resolve: a world map that claims to know no cities.
+  it("serves the best-known cities when the query fails", async () => {
+    const { getCitiesInBounds, isDegraded } = await load({ data: null, error: { message: "network" } });
+    const out = await getCitiesInBounds(bounds, { zoom: 6 });
+    expect(out.map((c) => c.n)).toContain("Paris");
+    expect(isDegraded()).toBe(true);
   });
 
-  it("still returns [] when there is no backend configured at all", async () => {
-    // Not a failure: an app running without Supabase is a supported state, and
-    // the map simply has nothing to show.
+  it("serves them when there is no backend configured at all", async () => {
     vi.resetModules();
     vi.doMock("../lib/supabaseClient.js", () => ({ supabase: null }));
-    const { getCitiesInBounds } = await import("../destinations.js");
+    const { getCitiesInBounds, isDegraded } = await import("../destinations.js");
+    const out = await getCitiesInBounds(bounds, { zoom: 6 });
+    expect(out.length).toBeGreaterThan(0);
+    expect(isDegraded()).toBe(true);
+  });
+
+  it("still never confuses a failure with an empty area", async () => {
+    // A working query over empty water must NOT be reported as degraded, or
+    // the distinction the fallback was built to preserve is lost again.
+    const { getCitiesInBounds, isDegraded } = await load({ data: [], error: null });
     await expect(getCitiesInBounds(bounds, { zoom: 6 })).resolves.toEqual([]);
+    expect(isDegraded()).toBe(false);
   });
 
   it("rejects nonsense bounds without calling out", async () => {
