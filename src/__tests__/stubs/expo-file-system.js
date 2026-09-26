@@ -1,24 +1,38 @@
-// Stand-in for expo-file-system. Records what was asked of it so tests can
-// assert on the calls, and lets a test make any of them fail.
-export const cacheDirectory = "file:///cache/";
-export const documentDirectory = "file:///docs/";
-export const EncodingType = { Base64: "base64", UTF8: "utf8" };
+// Stand-in for the ROOT entry point of expo-file-system — the one that stopped
+// working in SDK 54 and that this app imported anyway for months.
+//
+// What the real package does there:
+//   • documentDirectory, cacheDirectory and EncodingType are simply GONE, so
+//     reading them gives undefined. `documentDirectory + "memories/"` becomes
+//     the string "undefinedmemories/".
+//   • copyAsync, getInfoAsync, makeDirectoryAsync, readAsStringAsync and
+//     writeAsStringAsync are still exported, and THROW when called. The package
+//     says so itself: "@deprecated … This method will throw in runtime."
+//
+// The old stub made all of it work, which is precisely why the suite stayed
+// green while the album, the short renderer and photo storage were broken on a
+// real phone. This stub tells the truth instead. Anything that needs the working
+// API imports "expo-file-system/legacy", which has its own stub.
+//
+// The new File/Directory API is deliberately not stubbed here: nothing in the
+// app uses it yet, and inventing a shape for it would be guessing.
 
-export const calls = [];
-export const failures = new Map();   // method name -> Error to throw
-
-const record = async (name, ...args) => {
-  calls.push({ name, args });
-  const err = failures.get(name);
-  if (err) throw err;
+const deprecated = (name) => () => {
+  throw new Error(
+    `Method ${name} imported from "expo-file-system" is deprecated and throws at ` +
+    `runtime. Import it from "expo-file-system/legacy", or migrate to the ` +
+    `File/Directory API.`,
+  );
 };
 
-export const getInfoAsync = async (uri) => {
-  await record("getInfoAsync", uri);
-  return { exists: true, uri };
-};
-export const makeDirectoryAsync = (...a) => record("makeDirectoryAsync", ...a);
-export const copyAsync = (...a) => record("copyAsync", ...a);
-export const writeAsStringAsync = (...a) => record("writeAsStringAsync", ...a);
-export const readAsStringAsync = async (...a) => { await record("readAsStringAsync", ...a); return "ZmFrZQ=="; };
-export const deleteAsync = (...a) => record("deleteAsync", ...a);
+export const copyAsync = deprecated("copyAsync");
+export const getInfoAsync = deprecated("getInfoAsync");
+export const makeDirectoryAsync = deprecated("makeDirectoryAsync");
+export const readAsStringAsync = deprecated("readAsStringAsync");
+export const writeAsStringAsync = deprecated("writeAsStringAsync");
+export const deleteAsync = deprecated("deleteAsync");
+export const moveAsync = deprecated("moveAsync");
+export const readDirectoryAsync = deprecated("readDirectoryAsync");
+export const downloadAsync = deprecated("downloadAsync");
+export const uploadAsync = deprecated("uploadAsync");
+export const getContentUriAsync = deprecated("getContentUriAsync");

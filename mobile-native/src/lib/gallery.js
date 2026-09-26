@@ -5,7 +5,19 @@
 // Metadata lives in the localStorage polyfill (AsyncStorage-backed).
 
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
+// expo-file-system/legacy, deliberately.
+//
+// The main entry point stopped exporting this API in SDK 54: documentDirectory
+// and EncodingType are simply absent from it, and copyAsync, getInfoAsync,
+// readAsStringAsync and writeAsStringAsync are still exported but THROW when
+// called — "@deprecated … This method will throw in runtime", in the package own
+// words. Importing them from the root did not fail to build, and the tests use a
+// stub, so nothing said a word.
+//
+// The replacement is the File/Directory class API. That is a real migration and
+// worth doing on its own; this is the one-line change that makes the album, the
+// short renderer and photo storage work again.
+import * as FileSystem from "expo-file-system/legacy";
 
 const PHOTO_DIR = FileSystem.documentDirectory + "memories/";
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as picker from "expo-image-picker";
-import * as fsx from "expo-file-system";
+import * as fsx from "expo-file-system/legacy";
 
 // The native gallery. Two behaviours here were silent failures until recently,
 // and both cost the user their photograph:

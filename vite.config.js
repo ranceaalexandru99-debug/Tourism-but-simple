@@ -76,16 +76,30 @@ export default defineConfig(({ mode }) => ({
   // parse. Aliasing them to small stubs makes any native module importable.
   test: {
     alias: {
+      // "expo-file-system/legacy" FIRST. Vite matches a string alias as a
+      // prefix, so the bare package name would otherwise capture the subpath
+      // too and rewrite it to <stub>/legacy, which does not exist.
+      //
+      // The two stubs are deliberately different: the legacy one works, and the
+      // root one throws, exactly as the real package does since SDK 54. That is
+      // not pedantry — the app imported the throwing entry point for months and
+      // the suite stayed green because the old stub made the root work.
       ...Object.fromEntries(
         [
-          "expo-crypto", "expo-file-system", "expo-image-picker",
-          "expo-constants", "react-native",
-          "expo-print", "expo-sharing", "expo-image-manipulator",
-        ].map((pkg) => [
-          pkg,
+          ["expo-file-system/legacy", "expo-file-system-legacy"],
+          ["expo-file-system", "expo-file-system"],
+          ["expo-crypto", "expo-crypto"],
+          ["expo-image-picker", "expo-image-picker"],
+          ["expo-constants", "expo-constants"],
+          ["react-native", "react-native"],
+          ["expo-print", "expo-print"],
+          ["expo-sharing", "expo-sharing"],
+          ["expo-image-manipulator", "expo-image-manipulator"],
+        ].map(([spec, stub]) => [
+          spec,
           path.resolve(
             path.dirname(fileURLToPath(import.meta.url)),
-            `src/__tests__/stubs/${pkg}.js`,
+            `src/__tests__/stubs/${stub}.js`,
           ),
         ]),
       ),

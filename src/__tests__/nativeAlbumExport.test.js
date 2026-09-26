@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as sharing from "expo-sharing";
 import * as print from "expo-print";
 import { state as manip } from "expo-image-manipulator";
-import * as fsx from "expo-file-system";
+import * as fsx from "expo-file-system/legacy";
 import {
   exportAlbumPdf, buildShortScenes, buildShortPayload, shareShort, SHORT_MAX_PHOTOS,
 } from "../../mobile-native/src/lib/albumExport.js";
