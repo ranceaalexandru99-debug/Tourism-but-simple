@@ -16,6 +16,8 @@
 // visit. A small concurrency gate keeps a route screen (≈8 tiles at once)
 // from tripping Wikimedia's rate limiting in the first place.
 
+import { WIKI_HEADERS } from "./userAgent.js";
+
 const mem = {};
 // v3: bumped for the search+commons fallback chain so old cached misses retry.
 const LS = (n) => `vai_photo3_${n}`;
@@ -54,7 +56,10 @@ const TRANSIENT = Symbol("transient");
 
 async function getJson(url) {
   let res;
-  try { res = await fetch(url); } catch { return TRANSIENT; }
+  // The headers are not optional here. Wikimedia answers 403 to React Native
+  // default user agent, so without them every stage of this chain fails and no
+  // photo ever appears — which is exactly what happened on the phone.
+  try { res = await fetch(url, { headers: WIKI_HEADERS }); } catch { return TRANSIENT; }
   if (res.status === 404) return null;
   if (!res.ok) return TRANSIENT;
   try { return await res.json(); } catch { return null; }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Image, ActivityIndicator, StyleSheet } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { fetchPhoto } from "../lib/photos.js";
+import { WIKI_HEADERS, isRemote } from "../lib/userAgent.js";
 import { CategoryIcon } from "../icons.js";
 
 // Real Wikipedia photo for a place, with a category-SVG fallback while loading
@@ -26,12 +27,19 @@ export default function PoiImage({ name, emoji, tags, wiki, context, width = "10
   const base = [styles.base, { width, height, borderRadius: radius, overflow: "hidden" }, style];
 
   if (state.status === "done" && state.src) {
+    // React Native loads images through its own client, with its own user agent
+    // — so the headers photos.js sends do not apply here, and Wikimedia's image
+    // host refuses okhttp exactly as its API does (measured: 403). Without this
+    // the photo resolves fine and then simply never draws.
+    const source = isRemote(state.src)
+      ? { uri: state.src, headers: WIKI_HEADERS }
+      : { uri: state.src };
     return (
       <View style={base}>
         {fit === "contain" && (
-          <Image source={{ uri: state.src }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={14} />
+          <Image source={source} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={14} />
         )}
-        <Image source={{ uri: state.src }} style={{ width: "100%", height: "100%" }} resizeMode={fit} />
+        <Image source={source} style={{ width: "100%", height: "100%" }} resizeMode={fit} />
       </View>
     );
   }
