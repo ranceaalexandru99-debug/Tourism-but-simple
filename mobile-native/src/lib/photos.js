@@ -19,6 +19,8 @@
 import { WIKI_HEADERS } from "./userAgent.js";
 
 const mem = {};
+
+
 // v3: bumped for the search+commons fallback chain so old cached misses retry.
 const LS = (n) => `vai_photo3_${n}`;
 // Bounded LRU: keeps the ~150 most recently used photo cache entries in
@@ -56,9 +58,9 @@ const TRANSIENT = Symbol("transient");
 
 async function getJson(url) {
   let res;
-  // The headers are not optional here. Wikimedia answers 403 to React Native
-  // default user agent, so without them every stage of this chain fails and no
-  // photo ever appears — which is exactly what happened on the phone.
+  // The headers are not optional. Wikimedia answers 403 to React Native
+  // default user agent, so without them every stage of this chain fails.
+  // Verified on a device: with them, every request comes back 200.
   try { res = await fetch(url, { headers: WIKI_HEADERS }); } catch { return TRANSIENT; }
   if (res.status === 404) return null;
   if (!res.ok) return TRANSIENT;

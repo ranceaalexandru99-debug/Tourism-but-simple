@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { View, Image, ActivityIndicator, StyleSheet } from "react-native";
 import { C, themedStyles } from "../lib/theme.js";
 import { fetchPhoto } from "../lib/photos.js";
-import { WIKI_HEADERS, isRemote } from "../lib/userAgent.js";
+import { localPhoto } from "../lib/photoCache.js";
 import { CategoryIcon } from "../icons.js";
 
 // Real Wikipedia photo for a place, with a category-SVG fallback while loading
@@ -20,20 +20,24 @@ export default function PoiImage({ name, emoji, tags, wiki, context, width = "10
   useEffect(() => {
     let on = true;
     setState({ status: "loading", src: null });
-    fetchPhoto(name, wiki, context).then((s) => { if (on) setState({ status: "done", src: s }); });
+    // Resolve the URL, then bring the bytes down ourselves. React Native
+    // loads images with a client that does not send the headers Wikimedia
+    // requires, so a remote URL handed straight to <Image> comes back 403 —
+    // measured on a phone. photoCache turns it into a local file.
+    fetchPhoto(name, wiki, context)
+      .then((url) => (url ? localPhoto(url) : null))
+      .then((src) => { if (on) setState({ status: "done", src }); })
+      .catch(() => { if (on) setState({ status: "done", src: null }); });
     return () => { on = false; };
   }, [name, wiki, context]);
 
   const base = [styles.base, { width, height, borderRadius: radius, overflow: "hidden" }, style];
 
   if (state.status === "done" && state.src) {
-    // React Native loads images through its own client, with its own user agent
-    // — so the headers photos.js sends do not apply here, and Wikimedia's image
-    // host refuses okhttp exactly as its API does (measured: 403). Without this
-    // the photo resolves fine and then simply never draws.
-    const source = isRemote(state.src)
-      ? { uri: state.src, headers: WIKI_HEADERS }
-      : { uri: state.src };
+    // A local file by now. Passing the remote URL here, with or without
+    // headers, comes back 403 — React Native's image client does not send them.
+    // photoCache.js carries the measurement.
+    const source = { uri: state.src };
     return (
       <View style={base}>
         {fit === "contain" && (

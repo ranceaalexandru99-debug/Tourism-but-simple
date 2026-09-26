@@ -18,6 +18,7 @@ import { USER_AGENT, WIKI_HEADERS, isRemote } from "../../mobile-native/src/lib/
 
 const photos = fs.readFileSync("mobile-native/src/lib/photos.js", "utf8");
 const poiImage = fs.readFileSync("mobile-native/src/components/PoiImage.js", "utf8");
+const photoCache = fs.readFileSync("mobile-native/src/lib/photoCache.js", "utf8");
 
 describe("the user agent", () => {
   it("identifies the app, as Wikimedia's policy asks", () => {
@@ -48,19 +49,46 @@ describe("where it is sent", () => {
     expect(bareFetches.map((m) => m[0])).toEqual([]);
   });
 
-  it("goes on the image source too, since RN loads images itself", () => {
-    expect(poiImage).toContain("headers: WIKI_HEADERS");
-    expect(poiImage).toContain("isRemote(state.src)");
+  it("goes on the photo download, because <Image> cannot carry it", () => {
+    // This test used to assert the opposite — that the headers go on the image
+    // source — which is what the ImageSource type promises. On a phone React
+    // Native handed back, for every tile:
+    //
+    //   Unexpected HTTP code Response{protocol=h2, code=403,
+    //   url=https://thumb.wikimedia.org/.../330px-Split2.JPG}
+    //
+    // Images are loaded by a separate native client that does not send them.
+    // So the bytes come down through downloadAsync, which does.
+    expect(photoCache).toContain("WIKI_HEADERS");
+    expect(photoCache).toMatch(/downloadAsync\([^)]*headers/s);
   });
 
-  it("is not attached to local files", () => {
-    // A file:// or data: photo is read off the device; headers mean nothing and
-    // would only invite questions later.
+  it("hands <Image> a local file, never a remote URL", () => {
+    expect(poiImage).toContain("localPhoto");
+    // A remote URI reaching the image element is the bug coming back.
+    expect(poiImage).not.toMatch(/headers:\s*WIKI_HEADERS/);
+    expect(poiImage).toMatch(/const source = \{ uri: state\.src \}/);
+  });
+
+  it("knows a remote URL from a local one", () => {
+    // photoCache passes a file:// or data: source straight through: there is
+    // nothing to download, and nothing to send a header to.
     expect(isRemote("https://thumb.wikimedia.org/x.jpg")).toBe(true);
     expect(isRemote("http://example.org/x.jpg")).toBe(true);
     expect(isRemote("file:///docs/memories/a.jpg")).toBe(false);
     expect(isRemote("data:image/jpeg;base64,AAAA")).toBe(false);
     expect(isRemote(null)).toBe(false);
+  });
+
+  it("downloads a photo once, however many tiles ask", () => {
+    expect(photoCache).toContain("inflight");
+  });
+
+  it("does not keep a zero-byte file from a failed download", () => {
+    // <Image> fails on an empty file forever, and the cached-file check would
+    // never look past it.
+    expect(photoCache).toMatch(/have\.exists && have\.size > 0/);
+    expect(photoCache).toMatch(/status !== 200/);
   });
 
   it("sends a header object shaped the way fetch and Image both want", () => {
