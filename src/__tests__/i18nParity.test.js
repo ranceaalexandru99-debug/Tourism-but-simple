@@ -46,13 +46,28 @@ function readDictionaries(file) {
   return per;
 }
 
+// The web dictionary was split into one file per language, so only that
+// language's chunk is downloaded. Native keeps a single combined file: Metro
+// bundles everything regardless. The scan has to handle both shapes, and the
+// per-file one is the stricter check — a language that lost its whole file
+// would otherwise look "complete" by having no keys to compare.
+function readWebDictionaries() {
+  const per = Object.fromEntries(LANGS.map((l) => [l, new Set()]));
+  for (const lang of LANGS) {
+    const file = path.join(ROOT, "src", "i18n", `${lang}.js`);
+    const src = blankStrings(fs.readFileSync(file, "utf8"));
+    for (const m of src.matchAll(/^\s{2}([A-Za-z_$][\w$]*)\s*:/gm)) per[lang].add(m[1]);
+  }
+  return per;
+}
+
 const TARGETS = [
-  ["web", path.join(ROOT, "src", "i18n.js")],
+  ["web", null],
   ["native", path.join(ROOT, "mobile-native", "src", "lib", "i18n.js")],
 ];
 
 describe.each(TARGETS)("%s translations", (_label, file) => {
-  const per = readDictionaries(file);
+  const per = file ? readDictionaries(file) : readWebDictionaries();
 
   // Guards the test itself: a scanner that reads nothing would report every
   // language as complete, which is exactly the failure this test must not have.

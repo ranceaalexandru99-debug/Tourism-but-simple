@@ -13,8 +13,10 @@ import path from "node:path";
 // Written after nearly shipping t("delete"), which does not exist; the key is
 // called galDelete.
 
+// The web dictionary is one file per language now; English is the one that
+// matters here, since it is the fallback every missing key falls through to.
 const PAIRS = [
-  { root: "src", dict: "src/i18n.js" },
+  { root: "src", dict: "src/i18n/en.js" },
   { root: "mobile-native/src", dict: "mobile-native/src/lib/i18n.js" },
 ];
 
@@ -34,6 +36,11 @@ function walk(dir, out = []) {
 function definedKeys(dictFile) {
   const src = fs.readFileSync(dictFile, "utf8");
   const keys = new Set();
+  // A per-language file is a single flat object: every two-space key is a key.
+  if (/[/\\]i18n[/\\]\w+\.js$/.test(dictFile)) {
+    for (const m of src.matchAll(/^\s{2}([A-Za-z_$][\w$]*)\s*:/gm)) keys.add(m[1]);
+    return keys;
+  }
   const re = /(?:^|[\s{,])en:\s*\{/g;
   let m;
   while ((m = re.exec(src))) {
@@ -53,7 +60,8 @@ function definedKeys(dictFile) {
 
 describe.each(PAIRS)("t() keys in $root", ({ root, dict }) => {
   const defined = definedKeys(dict);
-  const files = walk(root).filter((f) => path.resolve(f) !== path.resolve(dict));
+  // The dictionaries themselves are not call sites.
+  const files = walk(root).filter((f) => !/[/\\]i18n[/\\]/.test(f) && path.resolve(f) !== path.resolve(dict));
 
   it("reads a real dictionary and a meaningful number of files", () => {
     // Without this the test could pass by finding nothing to check.

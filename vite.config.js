@@ -21,6 +21,18 @@ export default defineConfig(({ mode }) => ({
           injectRegister: "script",
           workbox: {
             globPatterns: ["**/*.{js,css,html,svg,png,ico,woff2}"],
+            // Not the fifteen translations a reader will never open.
+            //
+            // The dictionaries were split per language so the browser fetches
+            // one instead of sixteen — 82 KB off the first paint, measured.
+            // Precaching them all would hand that back: the service worker
+            // would download every one in the background on the first visit,
+            // which is the same bytes over the same connection, just later.
+            //
+            // The one that IS opened is cached at runtime below, so it still
+            // works offline after a single visit. English is not excluded — it
+            // rides in the main bundle as the fallback for any missing key.
+            globIgnores: ["**/assets/{ro,fr,es,it,de,pt,nl,pl,el,tr,uk,ru,zh,ja,ko}-*.js"],
             // City and POI data now comes from Supabase rather than static
             // /pois/*.json files, so cache the read queries as they're used.
             // StaleWhileRevalidate: offline serves the cached copy, online
@@ -35,6 +47,20 @@ export default defineConfig(({ mode }) => ({
               options: {
                 cacheName: "supabase-cities-v1",
                 expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+                cacheableResponse: { statuses: [200] },
+              },
+            }, {
+              // The language someone actually uses, kept after its first fetch
+              // so the app still opens in their own language offline.
+              // CacheFirst because a dictionary chunk is content-hashed: a new
+              // wording ships under a new filename, so a stale hit is
+              // impossible and revalidating would be a request for nothing.
+              urlPattern: /\/assets\/(ro|fr|es|it|de|pt|nl|pl|el|tr|uk|ru|zh|ja|ko)-[\w-]+\.js$/,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "i18n-v1",
+                // A handful: whatever a person switches between, not all of them.
+                expiration: { maxEntries: 4, maxAgeSeconds: 60 * 60 * 24 * 365 },
                 cacheableResponse: { statuses: [200] },
               },
             }],
