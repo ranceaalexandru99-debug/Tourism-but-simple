@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import "./fonts.css";
 import "leaflet/dist/leaflet.css";
 import App from "./App.jsx";
 import { I18nProvider, getLang, loadLanguage } from "./i18n.js";
