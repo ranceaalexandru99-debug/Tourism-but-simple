@@ -67,6 +67,40 @@ function loadFallback() {
 let degraded = !supabase;
 export const isDegraded = () => degraded;
 
+// How long a query is worth waiting for, and how long to stop asking after one
+// fails.
+//
+// Measured against a Supabase project that does not resolve: every request took
+// 9000 ms to give up, and nothing capped it. Typing in the search box did
+// nothing for nine seconds per keystroke, and generating a route — which makes
+// a series of these — sat on the loading screen for over thirty, with the
+// fallback sitting in memory the whole time.
+//
+// 2.5s is generous for an indexed query on a live project and short enough that
+// a dead one is barely noticed. The backoff matters more than the timeout: the
+// first lookup after a failure pays 2.5s, and every one for the next minute
+// goes straight to what is on the device.
+export const QUERY_TIMEOUT_MS = 2500;
+export const BACKOFF_MS = 60_000;
+let downUntil = 0;
+
+// Rejects on time. The query itself keeps running and resolves into nothing —
+// there is no cancelling a PostgREST call mid-flight, and a stray result that
+// arrives late is simply dropped.
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("timeout")), ms); }),
+  ]);
+}
+
+// Called after every failed attempt. Reading it is what lets a caller skip the
+// round trip entirely rather than rediscovering the outage for itself.
+const backendIsDown = () => Date.now() < downUntil;
+const markDown = () => { downUntil = Date.now() + BACKOFF_MS; degraded = true; };
+const markUp = () => { downUntil = 0; degraded = false; };
+
 // ---- cache -----------------------------------------------------------------
 // Small, bounded, and explicitly best-effort: a cache miss costs a round-trip,
 // never correctness.
@@ -108,15 +142,22 @@ async function cached(key, run, fallback) {
   if (hit) return hit;
   // An empty result here is indistinguishable from "we know no cities", so
   // every path that cannot reach the database goes through the fallback.
-  if (!supabase) { degraded = true; return fallback ? fallback(await loadFallback()) : []; }
+  //
+  // backendIsDown() is the important half: without it every lookup rediscovers
+  // the same outage at 9 seconds a time, and a route generation makes a dozen
+  // of them in a row.
+  if (!supabase || backendIsDown()) {
+    degraded = true;
+    return fallback ? fallback(await loadFallback()) : [];
+  }
   try {
-    const rows = await run();
+    const rows = await withTimeout(run(), QUERY_TIMEOUT_MS);
     const value = (rows || []).map(toCity);
     if (value.length) cachePut(key, value);
-    degraded = false;
+    markUp();
     return value;
   } catch {
-    degraded = true;
+    markDown();
     const stale = cacheGet(key);
     if (stale) return stale;
     return fallback ? fallback(await loadFallback()) : [];
@@ -234,7 +275,10 @@ export { lonRanges, tiersForZoom, usableBounds } from "./shared/cityBounds.js";
 // and indexed; panning stays cheap.
 export async function getCitiesInBounds(bounds, { zoom = 6, limit = 120 } = {}) {
   if (!usableBounds(bounds)) return [];
-  if (!supabase) {
+  // Same reasoning as cached(): panning the map fires a query per move, and
+  // rediscovering a dead backend at 9 seconds each makes the map unusable
+  // rather than merely degraded.
+  if (!supabase || backendIsDown()) {
     degraded = true;
     return selectCitiesInBounds(await loadFallback(), bounds, { zoom, limit });
   }
@@ -253,17 +297,26 @@ export async function getCitiesInBounds(bounds, { zoom = 6, limit = 120 } = {}) 
   // and "there are no cities here" are different facts, and returning [] for
   // both left the map telling people to move it — advice that could never work,
   // forever, with nothing saying why. The caller decides what to show.
-  const results = await Promise.all(lonRanges(west, east).map(([w, e]) => query(w, e)));
+  let results;
+  try {
+    results = await withTimeout(
+      Promise.all(lonRanges(west, east).map(([w, e]) => query(w, e))),
+      QUERY_TIMEOUT_MS,
+    );
+  } catch {
+    // Timed out rather than answered. Treated exactly like a query error below.
+    results = [{ error: { message: "timeout" } }];
+  }
   const failed = results.find((r) => r.error);
   if (failed) {
     // Showing the best-known cities beats showing a map that says the world is
     // empty. The screen still learns it is degraded, via isDegraded().
-    degraded = true;
+    markDown();
     const fb = selectCitiesInBounds(await loadFallback(), bounds, { zoom, limit });
     if (fb.length) return fb;
     throw new Error(failed.error.message || "query_failed");
   }
-  degraded = false;
+  markUp();
 
   return results
     .flatMap((r) => r.data || [])
