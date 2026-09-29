@@ -20,6 +20,14 @@ const ENDPOINTS = [
   "https://overpass.kumi.systems/api/interpreter",
 ];
 
+// The longest anyone waits on OpenStreetMap before the local engine takes over,
+// across every mirror. See fetchCityPoisLive for why it is a total rather than
+// a per-mirror limit.
+export const OSM_BUDGET_MS = 12000;
+// Below this there is no point starting: the query would be abandoned mid-flight
+// and the mirror would have done the work for nothing.
+export const MIN_ATTEMPT_MS = 2000;
+
 // localStorage cache, LRU-capped: ~12 KB per city, 30 cities ≈ 360 KB max.
 const CACHE_PREFIX = "vai_osm_city_";
 const LRU_KEY = "vai_osm_city_index";
@@ -88,17 +96,40 @@ export async function fetchCityPoisLive(city) {
 
   // Big cities choke the 5 km query — start tighter the denser the city is.
   // Ladder: the main instance first (fast for typical user IPs), then the
-  // mail.ru mirror (slower ~25s but reliably answers the full-radius query),
+  // mail.ru mirror (slower but answers the full-radius query when it answers),
   // then kumi as a last resort with a small radius.
   const first = (city.p || 0) > 2_000_000 ? 3000 : 4500;
   const attempts = [
-    { endpoint: ENDPOINTS[0], radius: first, timeoutMs: 20000 },
-    { endpoint: ENDPOINTS[1], radius: first, timeoutMs: 30000 },
-    { endpoint: ENDPOINTS[2], radius: 2200, timeoutMs: 15000 },
+    { endpoint: ENDPOINTS[0], radius: first, timeoutMs: 6000 },
+    { endpoint: ENDPOINTS[1], radius: first, timeoutMs: 6000 },
+    { endpoint: ENDPOINTS[2], radius: 2200, timeoutMs: 5000 },
   ];
 
+  // A budget for the whole ladder, not just for each rung.
+  //
+  // The timeouts used to be 20s, 30s and 15s, tried in series. Measured in a
+  // browser with all three failing: 65 seconds of loading screen before the
+  // local engine — which needs no network and produces a good route — was
+  // allowed to run. Per-mirror limits cannot bound that on their own; adding a
+  // fourth mirror would have made it worse again.
+  //
+  // This tier is an enhancement. If it answers, the trip gets real opening
+  // hours and coordinates; if it does not, the trip is still a trip. So the
+  // budget is set by what someone will sit through, not by what a mirror might
+  // eventually deliver.
+  //
+  // Shorter timeouts are not purely a sacrifice, either: the value is passed
+  // into the Overpass query itself as its server-side limit, so asking for less
+  // work makes an answer within the budget more likely rather than less.
+  const deadline = Date.now() + OSM_BUDGET_MS;
+
   for (const { endpoint, radius, timeoutMs } of attempts) {
-    const elements = await overpassOnce(endpoint, buildOverpassQuery(city.ll, radius, Math.floor(timeoutMs / 1000), city.t), timeoutMs);
+    const left = deadline - Date.now();
+    // Not worth opening a connection for: a query given a second is a query
+    // that will be abandoned, having cost the mirror the work anyway.
+    if (left < MIN_ATTEMPT_MS) break;
+    const budgeted = Math.min(timeoutMs, left);
+    const elements = await overpassOnce(endpoint, buildOverpassQuery(city.ll, radius, Math.floor(budgeted / 1000), city.t), budgeted);
     if (!elements) continue;
     // city.t is the Wikidata-rank tier — a mega city gets a bigger allowance.
     const pois = curateElements(elements, city.t, city.ll);
