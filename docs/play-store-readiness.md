@@ -114,6 +114,28 @@ permission the operation does not need. `pickPhoto()` therefore asks only for
 the camera, and `photosPermission` stays off. The picker hands back a URI it has
 already granted access to; nothing in the app reads device storage directly.
 
+## Download size
+
+7.1 MB from `npx expo export --platform android`: 6.6 MB of Hermes bytecode and
+675 KB of assets. Play compresses further, so the store listing will show less.
+
+Two things account for most of it, and both were deliberate choices worth
+remembering before adding to them:
+
+- **The 5000-city index, 766 KB.** It buys offline search and the explore map,
+  neither of which can work without it.
+- **Eight font files, 675 KB.** Only eight: @expo-google-fonts packages ship
+  every weight, and importing a family from its package root bundles all 32 —
+  2706 KB, of which 675 KB is ever read. `src/fonts.js` imports one weight per
+  line from its own subpath for that reason, and
+  `src/__tests__/nativeFonts.test.js` fails if a root import comes back.
+
+To measure again after adding a dependency:
+
+```bash
+cd mobile-native && npx expo export --platform android --output-dir /tmp/size
+```
+
 ## Before the first upload
 
 - [ ] Privacy policy at a **public URL** — required by the Data Safety form.
