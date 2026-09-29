@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
@@ -13,7 +14,29 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     ...(mode === "single"
-      ? [viteSingleFile()]
+      ? [viteSingleFile(), {
+          // The one file the single-file build was still leaving behind.
+          //
+          // /noflash.js is external on purpose in the normal build: keeping it
+          // out of the HTML is what lets the page ship script-src 'self' with
+          // no 'unsafe-inline'. But "one self-contained file you can send to
+          // anyone" is the entire point of this mode, and a page that 404s on a
+          // sibling script flashes light before dark and leaves <html lang>
+          // unset. There is no CSP over a file:// page to protect anyway.
+          name: "inline-noflash",
+          transformIndexHtml: {
+            order: "post",
+            handler(html) {
+              const js = fs.readFileSync(
+                path.resolve(path.dirname(fileURLToPath(import.meta.url)), "public", "noflash.js"),
+                "utf8",
+              );
+              const tag = /<script src="\.?\/noflash\.js"><\/script>/;
+              if (!tag.test(html)) throw new Error("noflash.js tag not found — did index.html change?");
+              return html.replace(tag, `<script>${js}</script>`);
+            },
+          },
+        }]
       : [VitePWA({
           registerType: "autoUpdate",
           // Register via an external script (not an inline one) so index.html
