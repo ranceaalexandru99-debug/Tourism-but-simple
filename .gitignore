@@ -7,10 +7,16 @@ share/
 .env.local
 *.log
 
-# Generated POI data (~30 MB and growing). Rebuilt by scripts/batch-pois.mjs and
+# Generated POI data (47 MB and growing). Rebuilt by scripts/batch-pois.mjs and
 # uploaded to Supabase by scripts/migrate-cities-to-supabase.mjs — derived data,
 # not source. Keeping it out of history also keeps clones small.
-data/
+#
+# `data/pois/`, not `data/`. The bare directory name matched at any depth, so it
+# silently swallowed src/data/fallbackCities.json — which src/destinations.js
+# imports, so a fresh clone could not build the web app at all (checked: vite
+# stops with UNRESOLVED_IMPORT) — and data/tier-overrides.json, which is
+# hand-written source that a script reads.
+data/pois/
 
 # Expo / React Native build output
 mobile-native/.expo/

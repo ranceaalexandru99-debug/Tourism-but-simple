@@ -1,0 +1,71 @@
+{
+  "_why": [
+    "The index ranks cities by `r`, the number of Wikipedias with an article.",
+    "Bots mass-created stub articles for thousands of small European settlements,",
+    "so Kurów (2,795 people) scores 236 — above Miami at 202 and Delhi at 204 —",
+    "and landed in the same tier as Paris. Tier drives what the explore map shows",
+    "at world zoom, so a Polish village sat next to Rome.",
+    "",
+    "Only entries with no other claim to the tier are listed. Of the 40 small",
+    "mega/major cities, 33 are national capitals, US state capitals or heritage",
+    "sites — checked against Wikidata P1376 and P1435, not by eye — and are left",
+    "exactly as they are. Troy is in that 33: 'Bronze Age settlement' with UNESCO",
+    "status, and it belongs where it is despite a population of zero.",
+    "",
+    "The replacement tier is the one the entry's population implies, using the",
+    "medians the existing tiers actually have: mega 1.9M, major 420k, notable",
+    "111k, hidden 20k. Every one of these falls under 40k.",
+    "",
+    "Applied by scripts/apply-tier-overrides.mjs to both copies of the index."
+  ],
+  "overrides": [
+    {
+      "id": "Q2316",
+      "name": "Kurów",
+      "from": "mega",
+      "to": "hidden",
+      "pop": 2795,
+      "r": 236
+    },
+    {
+      "id": "Q1404",
+      "name": "Uetersen",
+      "from": "mega",
+      "to": "hidden",
+      "pop": 18776,
+      "r": 225
+    },
+    {
+      "id": "Q196163",
+      "name": "Łobez",
+      "from": "major",
+      "to": "hidden",
+      "pop": 9792,
+      "r": 190
+    },
+    {
+      "id": "Q36198",
+      "name": "Siligo",
+      "from": "major",
+      "to": "hidden",
+      "pop": 789,
+      "r": 185
+    },
+    {
+      "id": "Q656699",
+      "name": "Montsoreau",
+      "from": "major",
+      "to": "hidden",
+      "pop": 408,
+      "r": 158
+    },
+    {
+      "id": "Q37378",
+      "name": "Arara",
+      "from": "major",
+      "to": "hidden",
+      "pop": 12212,
+      "r": 126
+    }
+  ]
+}
