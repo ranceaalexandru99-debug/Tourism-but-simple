@@ -16,7 +16,20 @@
     "medians the existing tiers actually have: mega 1.9M, major 420k, notable",
     "111k, hidden 20k. Every one of these falls under 40k.",
     "",
-    "Applied by scripts/apply-tier-overrides.mjs to both copies of the index."
+    "Applied by scripts/apply-index-corrections.mjs to both copies of the index.",
+    "",
+    "REMOVALS are entries that are not places. Finding them automatically does",
+    "not work: Wikidata does not file 'comune of Italy' under 'human settlement',",
+    "so that test flags 1951 of the 5000. What does work is listing what a place",
+    "is called, generously, and reading the fifty-odd entries left over. Exactly",
+    "one of them was not a city."
+  ],
+  "removals": [
+    {
+      "id": "Q154705",
+      "name": "unification of Germany",
+      "why": "A historical process, not a place. Wikidata gives it a coordinate — the Hall of Mirrors at Versailles, where the empire was proclaimed — and the index generator took that for a city at 48.8054, 2.1199, in France, tier 'notable', population 0. It surfaced when it won ownership of a nearby landmark against Versailles itself, 1 km away."
+    }
   ],
   "overrides": [
     {

@@ -18,7 +18,8 @@ const NATIVE = "mobile-native/src/data/destinations.json";
 
 const web = JSON.parse(fs.readFileSync(WEB, "utf8"));
 const native = JSON.parse(fs.readFileSync(NATIVE, "utf8"));
-const overrides = JSON.parse(fs.readFileSync("data/tier-overrides.json", "utf8")).overrides;
+const corrections = JSON.parse(fs.readFileSync("data/index-corrections.json", "utf8"));
+const { overrides, removals } = corrections;
 
 describe("city names", () => {
   it("never shows a database id as a city name", () => {
@@ -38,6 +39,21 @@ describe("city names", () => {
     const latin = /^[\p{Script=Latin}\p{P}\p{Zs}\p{Lm}\d]+$/u;
     const odd = web.filter((c) => !latin.test(c.n));
     expect(odd.map((c) => `${c.id} ${c.n}`)).toEqual([]);
+  });
+
+  it("holds only places", () => {
+    // "unification of Germany" was in here: a historical process whose Wikidata
+    // coordinate is the Hall of Mirrors at Versailles, which the generator read
+    // as a city in France with a population of zero.
+    //
+    // There is no automatic test for this — Wikidata does not file "comune of
+    // Italy" under "human settlement", so asking that question flags 1951 of
+    // the 5000. The list was read by hand and exactly one entry was not a
+    // place. This guards the answer, not the method.
+    for (const r of removals) {
+      expect(web.find((c) => c.id === r.id)).toBeUndefined();
+      expect(native.find((c) => c.id === r.id)).toBeUndefined();
+    }
   });
 
   it("carries no leftover Wikipedia disambiguator", () => {

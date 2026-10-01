@@ -1,11 +1,12 @@
-// Apply data/tier-overrides.json to both copies of the city index.
+// Apply data/index-corrections.json to both copies of the city index: tier
+// overrides, and entries removed for not being places.
 //
-// Re-run this after regenerating destinations.json — the overrides correct a
-// signal the generator inherits from Wikidata, so a regeneration brings the
-// problem back. The file itself explains which problem and why only six entries
+// Re-run this after regenerating destinations.json — the corrections answer
+// things the generator inherits from Wikidata, so a regeneration brings the
+// problems back. The file itself explains which problems and why so few entries
 // are in it.
 //
-//   node scripts/apply-tier-overrides.mjs [--dry]
+//   node scripts/apply-index-corrections.mjs [--dry]
 //
 // Edits in place rather than regenerating the native copy from the web one:
 // the two hold the same data with different `img` encoding, so a re-sync would
@@ -18,8 +19,9 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DRY = process.argv.includes("--dry");
 
-const { overrides } = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "tier-overrides.json"), "utf8"));
-const wanted = new Map(overrides.map((o) => [o.id, o]));
+const { overrides, removals = [] } = JSON.parse(
+  fs.readFileSync(path.join(ROOT, "data", "index-corrections.json"), "utf8"),
+);
 
 const FILES = [
   path.join(ROOT, "src", "destinations.json"),
@@ -29,10 +31,26 @@ const FILES = [
 let problems = 0;
 
 for (const file of FILES) {
-  const cities = JSON.parse(fs.readFileSync(file, "utf8"));
+  let cities = JSON.parse(fs.readFileSync(file, "utf8"));
   const byId = new Map(cities.map((c) => [c.id, c]));
   let changed = 0;
   let already = 0;
+  let removed = 0;
+
+  for (const r of removals) {
+    const city = byId.get(r.id);
+    if (!city) { already++; continue; }
+    // Same name check as the tier overrides: a removal that silently deletes a
+    // different city after a regeneration is the worst outcome here.
+    if (city.n !== r.name) {
+      console.error(`  ${r.id}: fișierul spune "${city.n}", ștergerea spune "${r.name}"`);
+      problems++;
+      continue;
+    }
+    cities = cities.filter((c) => c.id !== r.id);
+    byId.delete(r.id);
+    removed++;
+  }
 
   for (const o of overrides) {
     const city = byId.get(o.id);
@@ -58,8 +76,10 @@ for (const file of FILES) {
     changed++;
   }
 
-  if (!DRY && changed) fs.writeFileSync(file, JSON.stringify(cities));
-  console.log(`${path.relative(ROOT, file)}: ${changed} schimbate, ${already} deja corecte`);
+  if (!DRY && (changed || removed)) fs.writeFileSync(file, JSON.stringify(cities));
+  console.log(
+    `${path.relative(ROOT, file)}: ${changed} schimbate, ${removed} șterse, ${already} deja corecte`,
+  );
 }
 
 if (problems) {
@@ -67,4 +87,4 @@ if (problems) {
   process.exit(1);
 }
 if (DRY) console.log("\n--dry: nimic nu a fost scris.");
-console.log(`\n${wanted.size} suprascrieri, ${FILES.length} fișiere.`);
+console.log(`\n${overrides.length} suprascrieri, ${removals.length} ștergeri, ${FILES.length} fișiere.`);

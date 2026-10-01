@@ -105,11 +105,8 @@ export function buildOverpassQuery([lat, lon], radius, timeout = 45) {
 out center tags;`.trim();
 }
 
-// Normalize + rank + cap raw Overpass elements into our POI list.
-// `tier` ("mega" | "major" | "notable" | "hidden") sets how generous the caps
-// are; omitting it falls back to the small-city baseline.
 // Great-circle distance in metres.
-function metres(a, b) {
+export function metres(a, b) {
   const R = 6371000, rad = Math.PI / 180;
   const dLat = (b[0] - a[0]) * rad, dLon = (b[1] - a[1]) * rad;
   const h = Math.sin(dLat / 2) ** 2
@@ -120,6 +117,36 @@ function metres(a, b) {
 // Places you go out to, as opposed to places you travel to see.
 const VENUE = new Set(["bar", "nightclub", "livemusic", "restaurant", "cafe"]);
 
+// Drop stops that sit nearer some other city in the index than to this one.
+//
+// Only asked at a wide radius (scripts/retry-barren.mjs goes out to 20 km for
+// cities the 5 km question wrote off as barren), where a query stops being
+// about one city: 20 km from Suez reaches other towns, and their sights would
+// otherwise be listed as Suez's. `others` is the rest of the index; the caller
+// may pre-filter it to a bounding box, this only decides ownership.
+export function ownedByNearestCity(pois, city, others) {
+  if (!others.length) return { kept: pois, annexed: [] };
+  const kept = [];
+  const annexed = [];
+  for (const p of pois) {
+    const mine = metres(city.ll, p.ll);
+    // The NEAREST rival, not the first one the array happens to hold — the log
+    // line names it, and naming an arbitrary one is a way to be wrong quietly.
+    let thief = null;
+    let best = mine;
+    for (const o of others) {
+      const d = metres(o.ll, p.ll);
+      if (d < best) { best = d; thief = o; }
+    }
+    if (thief) annexed.push({ name: p.name, to: thief.n });
+    else kept.push(p);
+  }
+  return { kept, annexed };
+}
+
+// Normalize + rank + cap raw Overpass elements into our POI list.
+// `tier` ("mega" | "major" | "notable" | "hidden") sets how generous the caps
+// are; omitting it falls back to the small-city baseline.
 export function curateElements(elements, tier, centre) {
   const seen = new Set();
   const pois = [];
