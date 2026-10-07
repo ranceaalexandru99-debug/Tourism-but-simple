@@ -14,9 +14,16 @@ share/
 # `data/pois/`, not `data/`. The bare directory name matched at any depth, so it
 # silently swallowed src/data/fallbackCities.json — which src/destinations.js
 # imports, so a fresh clone could not build the web app at all (checked: vite
-# stops with UNRESOLVED_IMPORT) — and data/tier-overrides.json, which is
+# stops with UNRESOLVED_IMPORT) — and data/index-corrections.json, which is
 # hand-written source that a script reads.
 data/pois/
+
+# mobile-native/src/data/pois/ is NOT ignored, though it is derived from the
+# directory above and is 35 MB on disk (8 MB in git). The difference is that
+# data/pois/ can be rebuilt by re-running scripts/batch-pois.mjs against
+# OpenStreetMap, while the native pack can only be rebuilt FROM data/pois/ —
+# so ignoring both would mean a clone cannot build the native app at all, and
+# the app would ship the generic "Centrul istoric" itinerary it shipped before.
 
 # Expo / React Native build output
 mobile-native/.expo/

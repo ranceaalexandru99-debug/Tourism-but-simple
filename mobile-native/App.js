@@ -85,7 +85,7 @@ function Root() {
     setPrefs(p);
     go("loading");
     const t0 = Date.now();
-    const r = generateRoute(p);
+    const r = await generateRoute(p);
     const wait = 2600 - (Date.now() - t0);
     if (wait > 0) await new Promise((res) => setTimeout(res, wait));
     setRoute(r);
