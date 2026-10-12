@@ -15,7 +15,6 @@ import fs from "node:fs";
 // whatever the code happens to do.
 
 vi.mock("../../mobile-native/src/lib/poiShards.js", () => ({
-  SHARD_COUNT: 60,
   shardLoaders: Array.from({ length: 60 }, (_, n) => () =>
     JSON.parse(fs.readFileSync(`mobile-native/src/data/pois/${n}.json`, "utf8")),
   ),

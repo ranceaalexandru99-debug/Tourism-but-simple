@@ -20,14 +20,9 @@ import { shardLoaders } from "./poiShards.js";
 
 const loaded = [];
 
-// Which cities have packed objectives at all — the explore map and the trip
-// builder both want to know before they offer anything.
-export const hasPackedPois = (qid) => Boolean(qid) && qid in INDEX;
-
-export const packedCityCount = Object.keys(INDEX).length;
-
-// A city's objectives, or null when it has none packed (230 cities, almost all
-// of them villages the crawler found too little in).
+// A city's objectives, or null when it has none packed — 230 cities, almost
+// all of them villages the crawler found too little in. Those go to osmLive.js,
+// which asks OpenStreetMap on the spot.
 export function loadPackedPois(qid) {
   if (!qid) return null;
   const shard = INDEX[qid];

@@ -69,7 +69,8 @@
     "extra": {
       "revenueCatAndroidKey": "",
       "revenueCatIosKey": "",
-      "errorEndpoint": ""
+      "errorEndpoint": "",
+      "apiBase": ""
     }
   }
 }

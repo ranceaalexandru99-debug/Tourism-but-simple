@@ -3,20 +3,23 @@
 // without any external API. A real Claude API call would slot in at
 // generateRoute() — same input/output shape.
 //
-// Three tiers of objectives, best first:
+// Four tiers of objectives, best first:
 //
 //   1. DESTINATIONS below — 19 cities written out by hand, with the local tips
 //      and the "go at 8:00, it's almost empty" advice no database holds.
 //   2. The packed OpenStreetMap objectives — 265,740 real places across 4,769
 //      cities, from data/pois/ via scripts/pack-native-pois.mjs. See poiPack.js.
-//   3. FALLBACK — "Centrul istoric", "Muzeul orașului". Until tier 2 existed
-//      this is what 4,980 of the 4,999 cities in the index got: an itinerary
-//      with no real name in it.
+//   3. OpenStreetMap, asked now — for the 230 cities the pack skips. Bounded to
+//      twelve seconds, cached afterwards. See osmLive.js.
+//   4. FALLBACK — "Centrul istoric", "Muzeul orașului". Until tiers 2 and 3
+//      existed this is what 4,980 of the 4,999 cities in the index got: an
+//      itinerary with no real name in it and nothing for the map to draw.
 //
-// Tier 2 is why generateRoute is async now.
+// Tiers 2 and 3 are why generateRoute is async now.
 
 import { searchDestinations, nameMatchesCity } from "./destinations.js";
 import { loadPackedPois } from "./poiPack.js";
+import { fetchCityPoisLive } from "./osmLive.js";
 import { buildDest } from "../shared/poiDest.js";
 import { tStatic } from "./i18n.js";
 
@@ -407,12 +410,11 @@ function genericDestination(query) {
   return { key: "custom", name, ...FALLBACK };
 }
 
-// Tier 2: a city from the index, with its real OpenStreetMap objectives.
+// Which city in the 5000-city index a typed phrase means, or null.
 //
 // Mirrors the web app's loadOsmDest (src/aiEngine.js) down to the candidate
-// list, because the two must agree on what a typed phrase means. The one
-// difference is the source: the web queries a database, this reads the bundle.
-function packedDestination(query) {
+// list, because the two must agree on what a typed phrase means.
+function resolveIndexCity(query) {
   const head = (query || "").split(",")[0].trim();
   if (head.length < 2) return null;
   // Try the whole head, then the first one or two words — a destination may
@@ -421,28 +423,50 @@ function packedDestination(query) {
   const candidates = [head, words.slice(0, 2).join(" "), words[0]]
     .filter((c, i, a) => c && a.indexOf(c) === i);
 
-  let city = null;
   for (const cand of candidates) {
     const m = searchDestinations(cand, 1)[0];
     // nameMatchesCity is alias-aware: "București", "Londra" and "Wien" accept
     // the English-named record rather than dropping to the generic route.
-    if (m && nameMatchesCity(cand, m)) { city = m; break; }
+    if (m && nameMatchesCity(cand, m)) return m;
   }
-  if (!city) return null;
+  return null;
+}
 
-  const payload = loadPackedPois(city.id);
-  if (!payload) return null;
-
+// Turn an objectives payload into a destination, or null when there is too
+// little in it to plan with. A city can clear the packing bar and still yield
+// too few stops once cafés and restaurants are set aside, and an itinerary of
+// two stops with a full budget attached is worse than the generic one.
+function destFromPayload(city, payload) {
+  if (!payload?.pois?.length) return null;
   const dest = buildDest(
     { name: city.n, country: city.c, ll: city.ll, emoji: "📍", blurb: "" },
     payload,
     { foodFallback: tStatic("osmFoodFallback"), transport: tStatic("osmTransport") },
   );
-  // A city can clear the packing bar and still yield too little to plan with
-  // once cafés and restaurants are set aside. An itinerary of two stops with a
-  // full budget attached is worse than the generic one.
   if (dest.pois.length < 3) return null;
   return { ...dest, cityId: city.id };
+}
+
+// Tier 2: a city from the index, with the objectives shipped in the bundle.
+function packedDestination(city) {
+  return destFromPayload(city, loadPackedPois(city.id));
+}
+
+// Tier 2.5: ask OpenStreetMap now, for the 230 cities the pack skips.
+//
+// Bounded to twelve seconds across all three mirrors and cached afterwards —
+// see shared/osmLive.js. On failure the caller falls through to the generic
+// itinerary, which is what every one of these cities got before.
+async function liveDestination(city) {
+  try {
+    return destFromPayload(city, await fetchCityPoisLive(city));
+  } catch {
+    // The shared module swallows its own network failures, but this is the only
+    // await on the path App.js takes to build a trip, and App.js has no catch
+    // around it: anything thrown here leaves the loading screen spinning for
+    // good. The generic itinerary is the floor, and the floor has to hold.
+    return null;
+  }
 }
 
 function scorePoi(poi, interests) {
@@ -588,11 +612,16 @@ export function recomputeRoute(route) {
 // time a city in it is opened. App.js already holds the loading screen for a
 // minimum of 2.6 seconds, so this is hidden entirely.
 export async function generateRoute(prefs) {
-  const dest =
-    resolveDestination(prefs.destination)
-    || packedDestination(prefs.destination)
-    || genericDestination(prefs.destination);
-  return assembleRoute(dest, prefs);
+  let dest = resolveDestination(prefs.destination);
+
+  if (!dest) {
+    const city = resolveIndexCity(prefs.destination);
+    // Resolved once and used twice: the packed objectives if the bundle has
+    // them, otherwise one bounded trip to OpenStreetMap.
+    if (city) dest = packedDestination(city) || (await liveDestination(city));
+  }
+
+  return assembleRoute(dest || genericDestination(prefs.destination), prefs);
 }
 
 export function needsClarification(prefs) {

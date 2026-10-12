@@ -2,7 +2,6 @@
 //
 // One require() per shard, written out because Metro cannot follow a computed
 // path. Each is evaluated the first time a city in that shard is opened.
-export const SHARD_COUNT = 60;
 export const shardLoaders = [
   () => require("../data/pois/0.json"),
   () => require("../data/pois/1.json"),
