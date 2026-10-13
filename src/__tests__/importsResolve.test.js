@@ -67,5 +67,8 @@ describe("relative imports", () => {
       }
     }
     expect(broken).toEqual([]);
-  });
+    // Sixty seconds, not vitest's five: this reads every source file and stats
+    // each specifier against seven candidate extensions, which takes over ten
+    // when the other file-walking tests run alongside it.
+  }, 60000);
 });

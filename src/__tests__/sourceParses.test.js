@@ -29,7 +29,12 @@ function walk(dir, out = []) {
   return out;
 }
 
-const files = walk(".").length ? ROOTS.flatMap((r) => walk(r)) : [];
+// The guard here used to be `walk(".").length`, which walked the entire
+// repository — .git objects included — to establish that the working directory
+// was the right one. Measured alongside the other file-walking tests, the three
+// of them took over thirty seconds and blew vitest's five-second default, which
+// is where several unexplained timeouts in full runs came from.
+const files = fs.existsSync("package.json") ? ROOTS.flatMap((r) => walk(r)) : [];
 
 describe("every source file", () => {
   it("covers the whole codebase, not a corner of it", () => {
@@ -52,5 +57,10 @@ describe("every source file", () => {
       }
     }
     expect(broken).toEqual([]);
-  });
+    // Sixty seconds, not vitest's five. Babel-parsing a hundred files — two of
+    // them the 2,200-line i18n dictionaries — takes a few seconds alone and
+    // over ten when the other file-walking tests run beside it. The default was
+    // simply wrong for this, and the symptom was a timeout in full runs that
+    // disappeared whenever the file was run on its own.
+  }, 60000);
 });

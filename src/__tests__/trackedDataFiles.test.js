@@ -54,7 +54,10 @@ describe("data files the build needs", () => {
       }
     }
     expect(missing).toEqual([]);
-  });
+    // Sixty seconds, not vitest's five: `git ls-files` plus a read of every
+    // source file, which takes over ten when the other file-walking tests run
+    // alongside it.
+  }, 60000);
 
   it("still leaves the crawled POIs out of history", () => {
     // The other half of the rule: correcting the over-broad ignore must not
