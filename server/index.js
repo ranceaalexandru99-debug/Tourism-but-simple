@@ -24,6 +24,7 @@ import {
 } from "../src/shared/routeSchema.js";
 import { createRateLimiter, DEFAULT_MAX } from "./rateLimit.js";
 import { appendCapped } from "./errorLog.js";
+import { sanitizePois, isCityId, MIN_POIS, MAX_POIS } from "./contributions.js";
 
 // Read .env by hand. This is a plain Node process, not a Vite one, so nothing
 // loads it automatically — without this the server started perfectly happily
@@ -189,42 +190,33 @@ app.post("/api/contribute-pois", async (req, res) => {
   }
 
   const { cityId, pois } = req.body || {};
-  if (typeof cityId !== "string" || !/^Q\d+$/.test(cityId)) {
+  if (!isCityId(cityId)) {
     return res.status(400).json({ error: "bad_request", message: "cityId must be a Wikidata Q-id." });
   }
-  if (!Array.isArray(pois) || pois.length < 6 || pois.length > 200) {
-    return res.status(400).json({ error: "bad_request", message: "pois must hold between 6 and 200 entries." });
-  }
-  // Keep only fields the app reads, with the shapes it expects. Anything else a
-  // client sends is dropped rather than trusted into the database.
-  const CATEGORIES = new Set(["museum", "landmark", "attraction", "viewpoint", "park", "shopping", "restaurant", "cafe", "bar"]);
-  const clean = [];
-  for (const p of pois) {
-    if (!p || typeof p.name !== "string") continue;
-    const name = p.name.trim().slice(0, 120);
-    if (name.length < 2 || !CATEGORIES.has(p.category)) continue;
-    const [lat, lon] = Array.isArray(p.ll) ? p.ll : [];
-    if (typeof lat !== "number" || typeof lon !== "number") continue;
-    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-    clean.push({
-      name, category: p.category,
-      tags: Array.isArray(p.tags) ? p.tags.slice(0, 4).filter((t) => typeof t === "string") : [],
-      ll: [lat, lon],
-      wiki: typeof p.wiki === "string" ? p.wiki.slice(0, 200) : undefined,
-      hours: typeof p.hours === "string" ? p.hours.slice(0, 200) : undefined,
-      website: typeof p.website === "string" ? p.website.slice(0, 300) : undefined,
-      img: typeof p.img === "string" ? p.img.slice(0, 300) : undefined,
-    });
-  }
-  if (clean.length < 6) {
-    return res.status(400).json({ error: "bad_request", message: "Too few usable POIs after validation." });
+  if (!Array.isArray(pois) || pois.length < MIN_POIS || pois.length > MAX_POIS) {
+    return res.status(400).json({ error: "bad_request", message: `pois must hold between ${MIN_POIS} and ${MAX_POIS} entries.` });
   }
 
+  let clean;
   try {
     // The city must already exist in the index — this endpoint contributes
-    // POIs, it does not invent cities.
-    const { data: city } = await admin.from("cities").select("id").eq("id", cityId).maybeSingle();
+    // POIs, it does not invent cities. Its coordinates come back too, because
+    // objectives have to be near the city they claim to be in: the check used
+    // to be absent, so six entries anywhere on Earth were a valid contribution
+    // for Paris.
+    const { data: city } = await admin.from("cities").select("id,lat,lon").eq("id", cityId).maybeSingle();
     if (!city) return res.status(404).json({ error: "unknown_city", message: "No such city in the index." });
+
+    const centre = Number.isFinite(city.lat) && Number.isFinite(city.lon) ? [city.lat, city.lon] : null;
+    const result = sanitizePois(pois, centre);
+    clean = result.pois;
+    if (clean.length < MIN_POIS) {
+      return res.status(400).json({
+        error: "bad_request",
+        message: "Too few usable POIs after validation.",
+        dropped: result.dropped,
+      });
+    }
 
     // Never overwrite curated data with a crowd-sourced fetch: only insert when
     // the city has no row, or when the existing row is itself 'osm-live'.
