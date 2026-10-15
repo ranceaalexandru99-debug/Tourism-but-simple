@@ -65,7 +65,9 @@
       "Read(//d/Claude/Cuceritorii/**)",
       "Bash(node -e \"const d=require\\('./data/verificari/banat-1-fotbal-1.json'\\); console.log\\('OK, entries:', d.length\\); d.forEach\\(x=>console.log\\('-', x.fisier, '|', x.tip, '|', x.q\\)\\);\")",
       "Bash(node --input-type=module -e ' *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(npx vitest *)",
+      "Bash(xargs -n1 basename)"
     ]
   }
 }

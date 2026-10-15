@@ -29,11 +29,8 @@ beforeAll(async () => {
   server = http.createServer(app);
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   base = `http://127.0.0.1:${server.address().port}`;
-  // Importing the server pulls in express and its middleware. Under a full
-  // parallel run that has gone past vitest's 5-second hook default, and the
-  // failure arrived as "Cannot read properties of undefined (reading 'close')"
-  // from the teardown below — the real error hidden behind a second one.
-}, 30000);
+  // Importing express takes a moment — see hookTimeout in vite.config.js.
+});
 
 // Guarded, so that a beforeAll which never got as far as assigning `server`
 // reports its own failure instead of being masked by this one.

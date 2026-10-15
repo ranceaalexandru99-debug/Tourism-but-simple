@@ -13,6 +13,10 @@
 //       The OSM-objectives → itinerary bridge and its category tables. Lived
 //       in src/poiDb.js next to the Supabase query until the native app needed
 //       it, which is why native invented its objectives for so long.
+//   src/shared/weather.js → mobile-native/src/shared/weather.js
+//       Open-Meteo forecast. Was two hand-maintained copies, and the native one
+//       was left behind returning a Romanian label where the web returned a
+//       code — so the phone showed a thermometer for every day of every trip.
 //   src/shared/osmLive.js → mobile-native/src/shared/osmLive.js
 //       The live Overpass tier: the mirror ladder, the twelve-second budget and
 //       the cache. Each platform keeps a thin wrapper for the two things it
@@ -37,6 +41,7 @@ const jobs = [
   { from: "src/osmCurate.js", to: "mobile-native/src/osmCurate.js" },
   { from: "src/shared/poiDest.js", to: "mobile-native/src/shared/poiDest.js" },
   { from: "src/shared/osmLive.js", to: "mobile-native/src/shared/osmLive.js" },
+  { from: "src/shared/weather.js", to: "mobile-native/src/shared/weather.js" },
 ];
 
 const BANNER = "// SYNCED from ../../../src/ by scripts/sync-native-data.mjs — do not edit here.\n";

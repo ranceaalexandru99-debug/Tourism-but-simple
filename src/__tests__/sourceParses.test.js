@@ -57,10 +57,6 @@ describe("every source file", () => {
       }
     }
     expect(broken).toEqual([]);
-    // Sixty seconds, not vitest's five. Babel-parsing a hundred files — two of
-    // them the 2,200-line i18n dictionaries — takes a few seconds alone and
-    // over ten when the other file-walking tests run beside it. The default was
-    // simply wrong for this, and the symptom was a timeout in full runs that
-    // disappeared whenever the file was run on its own.
-  }, 60000);
+    // This takes a few seconds — see testTimeout in vite.config.js.
+  });
 });

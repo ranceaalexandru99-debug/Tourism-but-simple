@@ -10,7 +10,7 @@ import RecapSheet from "../components/RecapSheet.js";
 import { CURRENCIES, convert, phrasesFor, goodToKnow } from "../lib/locale.js";
 import { countryName, countryFlagOf } from "../lib/countryNames.js";
 import { dayDistanceKm, optimizeItinerary } from "../lib/geo.js";
-import { fetchWeather } from "../lib/weather.js";
+import { fetchWeather } from "../shared/weather.js";
 import { isPremium, usePremium } from "../lib/premium.js";
 import { tripAsText } from "../lib/tripText.js";
 import { loadCollab } from "../lib/mockCollab.js";

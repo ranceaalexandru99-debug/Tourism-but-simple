@@ -1,11 +1,24 @@
 // Per-day weather forecast via Open-Meteo (free, no API key, CORS-enabled).
-// Returns a map keyed by ISO date → { emoji, label, tmax, tmin }.
+// Returns a map keyed by ISO date → { emoji, code, tmax, tmin }.
 // Only days inside the ~16-day forecast window are returned; others are omitted
 // and the UI simply shows no weather for them.
+//
+// Shared byte-for-byte with mobile-native/src/shared/weather.js, and it is here
+// because of what happened while it was not. There were two hand-maintained
+// copies; the web one was changed to return a `code` the UI localizes, and the
+// native one was left returning a Romanian `label`. Every piece around it was
+// correct — icons.js maps the codes to sun and lightning glyphs, Route.js reads
+// `w.code`, the dictionary carries wx_clear and the rest in all sixteen
+// languages — so the result was that `w.code` came back undefined and every day
+// of every trip on a phone showed WeatherIcon's Thermometer fallback, while the
+// Romanian labels it did compute were displayed nowhere at all.
+//
+// Open-Meteo needs no key and sets CORS headers, so there is nothing
+// platform-specific left in this file.
 
 // Returns an emoji plus a `code` the UI localizes via t("wx_" + code); the
 // label itself lives in the i18n dictionary, not here.
-const codeInfo = (c) => {
+export const codeInfo = (c) => {
   if (c === 0) return { emoji: "☀️", code: "clear" };
   if (c <= 3) return { emoji: "⛅", code: "partly" };
   if (c === 45 || c === 48) return { emoji: "🌫", code: "fog" };

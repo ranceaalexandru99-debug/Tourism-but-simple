@@ -124,6 +124,23 @@ export default defineConfig(({ mode }) => ({
   // expo-modules-core and then react-native, whose Flow syntax vitest cannot
   // parse. Aliasing them to small stubs makes any native module importable.
   test: {
+    // Sixty seconds, not vitest's five.
+    //
+    // Eleven test files walk the whole source tree — the i18n key scans, the
+    // accessibility scan, the CSP check, the parse check, the import-resolution
+    // check. Each is a few seconds alone; run in parallel, and especially while
+    // something else on the machine is busy, they go well past five. The
+    // symptom was a handful of files failing per full run with "Test timed out
+    // in 5000ms", a different handful each time, every one of them passing when
+    // run on its own. I put it down to load three times before measuring it.
+    //
+    // Set here rather than per test because the next scanner somebody writes
+    // should not have to rediscover this. A test that takes ten seconds is not
+    // a test that should fail.
+    testTimeout: 60000,
+    // Importing the server pulls in express; under a full parallel run that has
+    // itself gone past the default.
+    hookTimeout: 60000,
     alias: {
       // "expo-file-system/legacy" FIRST. Vite matches a string alias as a
       // prefix, so the bare package name would otherwise capture the subpath

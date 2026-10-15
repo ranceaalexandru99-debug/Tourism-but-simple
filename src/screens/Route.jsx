@@ -6,7 +6,7 @@ import { phrasesFor, goodToKnow, countryFlag } from "../locale.js";
 import { generateRoute, computeBudget, recomputeRoute } from "../mockEngine.js";
 import { generateRouteSmart } from "../aiEngine.js";
 import { loadCollab } from "../mockCollab.js";
-import { fetchWeather } from "../weather.js";
+import { fetchWeather } from "../shared/weather.js";
 import { useI18n, tripTitle } from "../i18n.js";
 import { fmtDate, computeTripStats } from "../utils.js";
 import { useOnline } from "../useOnline.js";
